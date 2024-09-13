@@ -3,12 +3,14 @@
 #include <cmath>
 #include <iostream>
 #include <functional>
+#include <iterator>
+#include <vector>
 #include "../libs/gplot++.h"
 
 using namespace std;
 int seed = 42;
 random_device rnd;
-mt19937 gen(rnd());
+mt19937 gen(seed);
 
 long random(long min, long max){
 std::uniform_int_distribution<long> distrib(min, max);
@@ -31,40 +33,45 @@ void swap(std::bitset<len>& a,std::bitset<len>& b, size_t end_idx){
 template<int min, int max,int dad>
 class Population{
 public:
+    Gnuplot plt{};
+    class Genome;
     constexpr Population(){}
     static constexpr long n(){return static_cast<long>((max-min)*powl(10,dad));}
-    static constexpr long lenght(){return static_cast<long>(log2(n()))+1;}
-
+    static constexpr long lenght(){return static_cast<long>(log2(n()))+1;};
+    vector<Genome> mid_population  ={};
     
     void reproduction(){
-        vector<Genome> mid_population  ={};
         vector<double> y  ={};
         double avg = 0;
         for(auto gene: population){
-            double fy = function(static_cast<double>(gene.getGenome()));
+            double fy = function(pos_to_real(gene.getGenome()));
             y.push_back(fy);
             avg+=fy;
         }
         avg/=population.size();
         for(int i = 0; i < population.size(); i++){
-            float descendants = std::floor(y[i]/avg);
+            float descendants = std::round(y[i]/avg);
+            //if(descendants<=0){
+            //    continue;
+            //}
             for(int j = 0; j < descendants;j++){
                 mid_population.push_back(population[i]);
             }
 
         }
+        printm();
         
     }
-    void crossingover(double chance){
-        vector<Genome> mid_population  ={};
+    void crossingover(double chance= 0.5d){
+
         
         vector<Genome> a_half  ={};
         vector<Genome> b_half  ={};
         long a,b;
-        while(mid_population.size!=0){
+        while(mid_population.size()!=0){
             do{
-                a = random(0,lenght());
-                b = random(0,lenght());
+                a = random(0,mid_population.size() -1);
+                b = random(0,mid_population.size()-1);
             }while(a==b);
             auto a_it = std::next(mid_population.begin(), a);
             auto b_it = std::next(mid_population.begin(), b);
@@ -75,25 +82,29 @@ public:
         }
         for(int i = 0; i < a_half.size();i++){
             long idx =  random(1,lenght()-1);
-            double rand_v  = random(0.0d, 1.0d);
+            double rand_v  = randomd(0.0d, 1.0d);
             if(rand_v <chance){
                 swap<lenght()>(a_half[i].gene,b_half[i].gene,idx);
             }     
             
         }
-        mid_population.emplace_back(a_half);
-        mid_population.emplace_back(b_half);
+        mid_population.insert(mid_population.end(),a_half.begin(),a_half.end());
+        mid_population.insert(mid_population.end(),b_half.begin(),b_half.end());
        
     }
 
-    void mutation(double chance){
-        std:vector<Genome> mid_population  ={};
+    void mutation(double chance = 0.01d){
+
         for(auto g: mid_population){
-            double rand_v = random(0.0d, 1.0d);
+            double rand_v = randomd(0.0d, 1.0d);
             if(rand_v < chance){
-                long idx =  random(0,lenght());
+                long idx =  random(0,lenght()-1);
                 g.gene.flip(idx);
             }
+        }
+        printm();
+        for(auto pop: mid_population){
+            population.push_back(pop);
         }
 
     }
@@ -106,7 +117,6 @@ public:
         bitset<lenght()> gene;
     public:
         void setGenome(unsigned long value){
-            cout<<value<<endl;
             gene = bitset<lenght()>(value);
             
         }
@@ -120,7 +130,7 @@ public:
     vector<Genome>  population = {};
     long generate(){
         
-        return random(0,n());
+        return random(0,n()-1);
     }
     double pos_to_real(long pos){
         return pos*max/static_cast<double>(n())+min;
@@ -132,43 +142,72 @@ public:
             population.push_back(g);
         }
     }
-    void print(){
+    void printp(){
         for(auto p: population){
             cout<<p.getGenome()<<" ";
         }
     }
+    void printm(){
+        for(auto p: mid_population){
+            cout<<p.gene.to_ulong()<<" ";
+        }
+    }
     void draw(){
         
+        std::vector<double> x,y;
+        
+        for(double i = 0; i<10;i+=0.001){
+            x.push_back(i);
+            y.push_back(function(i)); 
+        }
+        std::vector<double> px,py;
+        for(auto pop: population){
+            px.push_back(pos_to_real(pop.gene.to_ulong()));
+            py.push_back(function(px.back()));
+        }
+
+        // You can provide a label and a linestyle
+        plt.plot(x, y, "Dataset #1", Gnuplot::LineStyle::LINES);
+        plt.plot(px, py, "Dataset #2", Gnuplot::LineStyle::POINTS);
+        // Now produce the plot
+        plt.show();
+    
+                
+    }
+    void step(){
+        reproduction();
+        crossingover();
+
+        mutation();
+        printp();
     }
     
 };
 int main(){
-    std::vector<double> x,y;  // No problem to use a vector of ints
-
+    int n;
     Population<0,10,3> p ={};
-    p.fill(200);
-    p.function = [&p](double x){return log(x)*cos(3*x-15);};
+    p.fill(10);
+    //p.function = [&p](double x){return log(x)*cos(3*x-15);};
+    p.function = [&p](double x){return x*x;};
     //auto function = [&p](double x)->double {return (1.85-x)*cos(3.5*x-0.5);};
-Gnuplot plt{};
-for(double i = 0; i<10;i+=0.001){
-    x.push_back(i);
-    y.push_back(p.function(i)); 
-    
+ 
+    p.draw();
 
-}
-std::vector<double> px,py;
-for(auto pop: p.population){
-    px.push_back(p.pos_to_real(pop.gene.to_ulong()));
-    py.push_back(p.function(px.back()));
-}
+p.plt.reset();
 
-// You can provide a label and a linestyle
-plt.plot(x, y, "Dataset #1", Gnuplot::LineStyle::LINES);
-plt.plot(px, py, "Dataset #2", Gnuplot::LineStyle::POINTS);
-// Now produce the plot
-plt.show();
+    p.step();
+    p.draw();
+    cout<<2;
+   std::cin.get();
+   p.plt.reset();
+    p.step();
+    p.draw();
+    cout<<3;
+    std::cin.get();
+    p.plt.reset();
 
     
     //p.print();
+
     return 0;
 }

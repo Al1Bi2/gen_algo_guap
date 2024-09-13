@@ -12,6 +12,19 @@ long random(long min, long max){
 std::uniform_int_distribution<long> distrib(min, max);
 return distrib(gen);
 }
+long randomd(double min, double max){
+std::uniform_real_distribution<double> distrib(min, max);
+return distrib(gen);
+}
+template<size_t len>
+void swap(std::bitset<len>& a,std::bitset<len>& b, size_t end_idx){
+
+    for(size_t i = 0; i < end_idx; i++){
+        bool tmp = a[i];
+        a[i] = b[i];
+        b[i] = tmp;  
+    }
+}
 
 template<int min, int max,int dad>
 class Population{
@@ -38,21 +51,58 @@ public:
         }
         
     }
-    void crossingover(){
-        std:vector<Genome<lenght()>> a_half  ={};
-        std:vector<Genome<lenght()>> b_half  ={};
+    void crossingover(double chance){
+        vector<Genome<lenght()>> mid_population  ={};
         
-
+        vector<Genome<lenght()>> a_half  ={};
+        vector<Genome<lenght()>> b_half  ={};
+        while(mid_population.size!=0){
+            do{
+                long a = random(0,m)
+                long b = random(0,m)
+            }while(a==b);
+            auto a_it = std::next(v.begin(), a);
+            auto b_it = std::next(v.begin(), b);
+            a_half.push_back(*a_it);
+            b_half.push_back(*b_it);
+            mid_population.erase(a_it);
+            mid_population.erase(b_it);
+        }
+        for(int i = 0; i < a_half.size():i++){
+            long idx =  random(1,lenght()-1);
+            rand = random(0.0d, 1.0d);
+            if(rand<chance){
+                swap<lenght()>(a_half[i].gene,b_half[i].gene,idx);
+            }     
+            
+        }
+        mid_population.emplace_back(a_half);
+        mid_population.emplace_back(b_half);
        
     }
+
+    void mutation(double chance){
+        std:vector<Genome<lenght()>> mid_population  ={};
+        for(auto g: mid_population){
+            rand = random(0.0d, 1.0d);
+            if(rand<chance){
+                long idx =  random(0,lenght());
+                g.gene.flip(idx);
+            }
+        }
+        
+    }
+
+
     std::function<long(long)> function;
     template<size_t bits>
     class  Genome{
-    private:
+    public:
         bitset<bits> gene;
     public:
         void setGenome(unsigned long value){
             gene = bitset<bits>(value);
+            
         }
         long getGenome(){
             return gene.to_ulong();

@@ -3,6 +3,8 @@
 #include <cmath>
 #include <iostream>
 #include <functional>
+#include "../libs/gplot++.h"
+
 using namespace std;
 int seed = 42;
 random_device rnd;
@@ -30,15 +32,17 @@ template<int min, int max,int dad>
 class Population{
 public:
     constexpr Population(){}
+    static constexpr long n(){return static_cast<long>((max-min)*powl(10,dad));}
+    static constexpr long lenght(){return static_cast<long>(log2(n()))+1;}
 
     
     void reproduction(){
-        std:vector<long>  = {};
-        std:vector<Genome<lenght()>> mid_population  ={};
-        doule avg = 0;
+        vector<Genome> mid_population  ={};
+        vector<double> y  ={};
+        double avg = 0;
         for(auto gene: population){
-            fy = function(gene.getGenome()
-            y.push_back(fy));
+            double fy = function(static_cast<double>(gene.getGenome()));
+            y.push_back(fy);
             avg+=fy;
         }
         avg/=population.size();
@@ -52,26 +56,27 @@ public:
         
     }
     void crossingover(double chance){
-        vector<Genome<lenght()>> mid_population  ={};
+        vector<Genome> mid_population  ={};
         
-        vector<Genome<lenght()>> a_half  ={};
-        vector<Genome<lenght()>> b_half  ={};
+        vector<Genome> a_half  ={};
+        vector<Genome> b_half  ={};
+        long a,b;
         while(mid_population.size!=0){
             do{
-                long a = random(0,m)
-                long b = random(0,m)
+                a = random(0,lenght());
+                b = random(0,lenght());
             }while(a==b);
-            auto a_it = std::next(v.begin(), a);
-            auto b_it = std::next(v.begin(), b);
+            auto a_it = std::next(mid_population.begin(), a);
+            auto b_it = std::next(mid_population.begin(), b);
             a_half.push_back(*a_it);
             b_half.push_back(*b_it);
             mid_population.erase(a_it);
             mid_population.erase(b_it);
         }
-        for(int i = 0; i < a_half.size():i++){
+        for(int i = 0; i < a_half.size();i++){
             long idx =  random(1,lenght()-1);
-            rand = random(0.0d, 1.0d);
-            if(rand<chance){
+            double rand_v  = random(0.0d, 1.0d);
+            if(rand_v <chance){
                 swap<lenght()>(a_half[i].gene,b_half[i].gene,idx);
             }     
             
@@ -82,26 +87,27 @@ public:
     }
 
     void mutation(double chance){
-        std:vector<Genome<lenght()>> mid_population  ={};
+        std:vector<Genome> mid_population  ={};
         for(auto g: mid_population){
-            rand = random(0.0d, 1.0d);
-            if(rand<chance){
+            double rand_v = random(0.0d, 1.0d);
+            if(rand_v < chance){
                 long idx =  random(0,lenght());
                 g.gene.flip(idx);
             }
         }
-        
+
     }
 
 
-    std::function<long(long)> function;
-    template<size_t bits>
+    std::function<double(double)> function;
+
     class  Genome{
     public:
-        bitset<bits> gene;
+        bitset<lenght()> gene;
     public:
         void setGenome(unsigned long value){
-            gene = bitset<bits>(value);
+            cout<<value<<endl;
+            gene = bitset<lenght()>(value);
             
         }
         long getGenome(){
@@ -109,16 +115,19 @@ public:
         }
     };
 public:
-    static constexpr long n(){return static_cast<long>((max-min)*powl(10,dad));}
-    static constexpr long lenght(){return static_cast<long>(log2(n()))+1;}
+    
     const double max_value = (max-min)*powl(10,dad);
-    vector<Genome<lenght()>>  population = {};
+    vector<Genome>  population = {};
     long generate(){
+        
         return random(0,n());
     }
-    void fill(){
-        for(int i = 0;i < n()/200; i++){
-            Population<min,max,dad>::Genome<lenght()> g;
+    double pos_to_real(long pos){
+        return pos*max/static_cast<double>(n())+min;
+    }
+    void fill( int count){
+        for(int i = 0;i < count; i++){
+            Genome g;
             g.setGenome(generate());
             population.push_back(g);
         }
@@ -128,24 +137,38 @@ public:
             cout<<p.getGenome()<<" ";
         }
     }
-    std::vector<std::vector<Genome<lenght()>>> split(){
-        std::vector<Genome<lenght()>>  p =  population;
-
+    void draw(){
         
-        std::vector<Genome<lenght()> a={};
-        
-        std::vector<Genome<lenght()> b={};
-        for(int i = 0; i < population.size();i++){
-            int rand_pos =  
-        }
-
-
     }
+    
 };
 int main(){
-    
+    std::vector<double> x,y;  // No problem to use a vector of ints
+
     Population<0,10,3> p ={};
-    p.fill();
-    p.print();
+    p.fill(200);
+    p.function = [&p](double x){return log(x)*cos(3*x-15);};
+    //auto function = [&p](double x)->double {return (1.85-x)*cos(3.5*x-0.5);};
+Gnuplot plt{};
+for(double i = 0; i<10;i+=0.001){
+    x.push_back(i);
+    y.push_back(p.function(i)); 
+    
+
+}
+std::vector<double> px,py;
+for(auto pop: p.population){
+    px.push_back(p.pos_to_real(pop.gene.to_ulong()));
+    py.push_back(p.function(px.back()));
+}
+
+// You can provide a label and a linestyle
+plt.plot(x, y, "Dataset #1", Gnuplot::LineStyle::LINES);
+plt.plot(px, py, "Dataset #2", Gnuplot::LineStyle::POINTS);
+// Now produce the plot
+plt.show();
+
+    
+    //p.print();
     return 0;
 }

@@ -10,13 +10,28 @@
 using namespace std;
 int seed = 42;
 random_device rnd;
-mt19937 gen(seed);
+mt19937 gen(rnd());
+enum class OptimizationType {
+    MINIMIZATION,
+    MAXIMIZATION
+};
+
+
+double calculate_fitness(double value, OptimizationType optimization_type, std::function<double(double)> function) {
+    double fitness = function(value);
+    if (optimization_type == OptimizationType::MINIMIZATION) {
+        return 1.0 / (fitness + 1e-10);  // Adding a small value to avoid division by zero
+    } else {
+        return fitness;
+    }
+}
+ 
 
 long random(long min, long max){
 std::uniform_int_distribution<long> distrib(min, max);
 return distrib(gen);
 }
-long randomd(double min, double max){
+double randomd(double min, double max){
 std::uniform_real_distribution<double> distrib(min, max);
 return distrib(gen);
 }
@@ -36,33 +51,52 @@ public:
     Gnuplot plt{};
     class Genome;
     constexpr Population(){}
-    static constexpr long n(){return static_cast<long>((max-min)*powl(10,dad));}
-    static constexpr long lenght(){return static_cast<long>(log2(n()))+1;};
+    static constexpr long lenght(){return static_cast<long>(log2((max-min)*pow(10,dad)))+1;};
+    static constexpr long n(){return static_cast<long>(powl(2,lenght()));}
+    OptimizationType optimization_type = OptimizationType::MAXIMIZATION;
     vector<Genome> mid_population  ={};
     
     void reproduction(){
-        vector<double> y  ={};
-        double avg = 0;
+        vector<double> fitness  ={};
+        vector<double> probabilities  ={};
+        double fitness_min = numeric_limits<double>::max();
         for(auto gene: population){
-            double fy = function(pos_to_real(gene.getGenome()));
-            y.push_back(fy);
-            avg+=fy;
-        }
-        avg/=population.size();
-        for(int i = 0; i < population.size(); i++){
-            float descendants = std::round(y[i]/avg);
-            //if(descendants<=0){
-            //    continue;
-            //}
-            for(int j = 0; j < descendants;j++){
-                mid_population.push_back(population[i]);
+            double fit = calculate_fitness(pos_to_real(gene.getGenome()), optimization_type, function);
+            fitness.push_back(fit);
+            if (fit < fitness_min) {
+                fitness_min = fit;
             }
-
         }
-        printm();
+
+        double normalized_min = fitness_min < 0 ? -fitness_min : 0;
+        for (auto& fit : fitness) {
+            fit += normalized_min;
+        }
+
+        double total_fitness = accumulate(fitness.begin(), fitness.end(), 0.0);
+
+        for(auto fit: fitness){
+            probabilities.push_back(fit/total_fitness);
+        }
+
+        mid_population.clear();
+
+        vector<double> cumulative_probabilities(probabilities.size());
+        partial_sum(probabilities.begin(), probabilities.end(), cumulative_probabilities.begin());
+
+        for(int i = 0; i< population.size();i++){
+            double random_value = randomd(0.0,1.0);
+            auto it = lower_bound(cumulative_probabilities.begin(), cumulative_probabilities.end(), random_value);
+            size_t index = distance(cumulative_probabilities.begin(), it);
+           mid_population.push_back(population[index]);
+ 
+        }   
         
+        
+
     }
-    void crossingover(double chance= 0.5d){
+
+    void crossingover(double chance= 0.7d){
 
         
         vector<Genome> a_half  ={};
@@ -93,7 +127,7 @@ public:
        
     }
 
-    void mutation(double chance = 0.01d){
+    void mutation(double chance = 0.001d){
 
         for(auto g: mid_population){
             double rand_v = randomd(0.0d, 1.0d);
@@ -102,10 +136,12 @@ public:
                 g.gene.flip(idx);
             }
         }
-        printm();
+        //printm();
+        population.clear();
         for(auto pop: mid_population){
             population.push_back(pop);
         }
+        mid_population.clear();
 
     }
 
@@ -133,7 +169,7 @@ public:
         return random(0,n()-1);
     }
     double pos_to_real(long pos){
-        return pos*max/static_cast<double>(n())+min;
+        return pos*(max-min)/static_cast<double>(n()-1)+min;
     }
     void fill( int count){
         for(int i = 0;i < count; i++){
@@ -146,17 +182,19 @@ public:
         for(auto p: population){
             cout<<p.getGenome()<<" ";
         }
+        cout<<endl;;
     }
     void printm(){
         for(auto p: mid_population){
             cout<<p.gene.to_ulong()<<" ";
         }
+        cout<<endl;
     }
     void draw(){
         
         std::vector<double> x,y;
         
-        for(double i = 0; i<10;i+=0.001){
+        for(double i = min; i<max;i+=0.001){
             x.push_back(i);
             y.push_back(function(i)); 
         }
@@ -177,37 +215,34 @@ public:
     void step(){
         reproduction();
         crossingover();
-
         mutation();
-        printp();
+        //printp();
     }
     
 };
 int main(){
-    int n;
-    Population<0,10,3> p ={};
-    p.fill(10);
+    int n=0;
+    Population<-10,10,3> p ={};
+    p.fill(100);
     //p.function = [&p](double x){return log(x)*cos(3*x-15);};
-    p.function = [&p](double x){return x*x;};
-    //auto function = [&p](double x)->double {return (1.85-x)*cos(3.5*x-0.5);};
+    //p.function = [&p](double x){return x*x;};
+    p.function = [&p](double x)->double {return (1.85-x)*cos(3.5*x-0.5);};
  
     p.draw();
 
-p.plt.reset();
-
-    p.step();
-    p.draw();
-    cout<<2;
-   std::cin.get();
-   p.plt.reset();
-    p.step();
-    p.draw();
-    cout<<3;
-    std::cin.get();
     p.plt.reset();
+    cin>>n;
+    while(n!=1){
+  
+        p.step();
 
-    
-    //p.print();
+        p.draw();
+
+        cin>>n;
+    }
+
+        
+        //p.print();
 
     return 0;
 }

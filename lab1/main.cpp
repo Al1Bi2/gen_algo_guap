@@ -191,19 +191,20 @@ private:
     }
 
     void mutation(){
-        for(auto gene: mid_population){
+        for(auto& pop: mid_population){
             double rand_v = randomd(0.0d, 1.0d);
             if(rand_v < probability_mutation){
                 long idx =  random(0,lenght()-1);
-                gene.gene.flip(idx);
+
+                pop.gene.flip(idx);
             }
         }
-        //printm();
+
         population.clear();
         for(auto pop: mid_population){
             population.push_back(pop);
         }
-        mid_population.clear();
+        //mid_population.clear();
     }
 
 
@@ -256,17 +257,15 @@ int main(){
     p.setFunction( [&p](double x){return log(x)*cos(3*x-15);});
     //p.function = [&p](double x){return x*x;};
     //p.function = [&p](double x)->double {return (1.85-x)*cos(3.5*x-0.5);};
- 
+    p.setPMut(0.01);
     p.draw();
 
-    std::cin.get();
+    
     cin>>n;
     while(n!=1){
   
         p.doSteps(20);
-
         p.draw();
-
         cin>>n;
     }
 

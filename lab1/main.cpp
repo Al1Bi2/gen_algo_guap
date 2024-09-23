@@ -6,7 +6,10 @@
 #include <iterator>
 #include <vector>
 #include <algorithm>
-#include "../libs/gplot++.h"
+#include <thread>
+#include <mutex>
+#include <chrono>
+//#include "../libs/gplot++.h"
 
 using namespace std;
 
@@ -46,11 +49,13 @@ public:
 
     constexpr Population(){}
 
-     sort_func = [](Genome a, Genome b) {return a.gene.to_ulong() > b; }
+    
     double get_best_point(){
-        auto sorted_pop = population;
+        auto sort_func = [this](Genome a, Genome b) {return  function(pos_to_real(a.getGenome())) > function(pos_to_real(b.getGenome())); };
+        vector<Genome> sorted_pop = population;
         
-        sort(sorted_pop.begin(),sorted_pop.end(), );  
+        sort(sorted_pop.begin(),sorted_pop.end(), sort_func);  
+        return pos_to_real(sorted_pop.front().getGenome());
     }
 
     void setFunction(function<double(double)> fun){
@@ -256,55 +261,90 @@ public:
         cout<<endl;
     } 
 };
-
-void gen_benchmark(int population, double crossingover_p, double mutation_p){
-
-    double local_extr = 9.19424;
-
-    double low_c= 0.2;
-    double high_c= 0.8;
-    double step_c= 0.05;
-    double low_m= 0.005;
-    double high_m= 0.4;
-    double step_m = 0.05;
-    vector<vector<vector<double>>> results;
-    for( int pc = 0; pc<=population; pc++){
-        for(double c = low_c;c<=high_c;step_c++){
-            for(double m = low_m;m<=high_m;step_m++){
-                Population<1,10,3> pop ={};
-                pop.fill(pc);
-                pop.setFunction( [&pop](double x){return log(x)*cos(3*x-15);});
-                pop.setPCross(c);
-                pop.setPMut(m);
+vector<int> generate_population_range(int min, int max) {
+    vector<int> populations;
+    for (int i = min; i <= max; i += 2) { 
+        populations.push_back(i);
+    }
+    return populations;
+}
 
 
-            }
-        }
+vector<double> generate_range(double low, double high, double step) {
+    vector<double> range;
+    for (double value = low; value <= high; value += step) {
+        range.push_back(value);
+    }
+    return range;
+}
+
+// Worker function to run the benchmark
+void benchmark_worker(int pc, double c, double m, int steps, function<double(double)> fun, double local_extr_v, 
+                      vector<tuple<int, double, double, double>>& local_results, mutex& results_mutex) {
+                           
+    
+
+    Population<1, 10, 3> pop = {};
+    pop.fill(pc);
+    pop.setFunction(fun);
+    pop.setPCross(c);
+    pop.setPMut(m);
+    pop.doSteps(steps);
+    
+
+    double error = local_extr_v - fun(pop.get_best_point());
+
+
+    {
+        lock_guard<mutex> guard(results_mutex);
+        local_results.push_back({pc, c, m, error});
     }
 }
 
-int main(){
-    int n=0;
-    Population<1,10,3> p ={};
-    p.fill(100);
-    
-    p.setFunction( [&p](double x){return log(x)*cos(3*x-15);});
-    //p.setFunction([&p](double x){return x*x;});
-    //p.function = [&p](double x)->double {return (1.85-x)*cos(3.5*x-0.5);};
-    p.setPMut(0.01);
-    p.draw();
 
-    
-    cin>>n;
-    while(n!=1){
-  
-        p.doSteps(20);
-        p.draw();
-        cin>>n;
+vector<tuple<int, double, double, double>> gen_benchmark(int population_min, int population_max,int population_step, double low_c, double high_c, double step_c, 
+                   double low_m, double high_m, double step_m, int steps, function<double(double)> fun, double fun_extr) {
+
+
+    double local_extr;
+    local_extr = fun_extr;
+    double local_extr_v = fun(local_extr);
+
+
+    auto start_time = chrono::high_resolution_clock::now();
+
+    vector<tuple<int, double, double, double>> results; 
+    vector<thread> threads; 
+    mutex results_mutex; 
+
+    for( int pc = population_min; pc<=population_max; pc+=population_step){
+        for(double c = low_c;c<=high_c;step_c++){
+            for(double m = low_m;m<=high_m;step_m++){
+                
+               threads.emplace_back(benchmark_worker,pc,c,m,steps,fun,local_extr_v,ref(results),ref(results_mutex));
+            }
+        }
     }
 
-        
-        //p.print();
+     for (auto& thread : threads) {
+        thread.join();
+    }
+    auto end_time = chrono::high_resolution_clock::now(); 
+    chrono::duration<double> duration = end_time - start_time;
 
+    cout << "Benchmark completed in " << duration.count() << " seconds." << endl;
+    return results;
+}
+
+int main(){
+    auto results = gen_benchmark(10, 50, 2, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05, 100, 
+                                  [](double x) { return x * x; }, 9.19424);
+    
+    for (const auto& result : results) {
+        cout << "Population: " << get<0>(result)
+             << ", Crossover: " << get<1>(result)
+             << ", Mutation: " << get<2>(result)
+             << ", Error: " << get<3>(result) << endl;
+    }
     return 0;
 }

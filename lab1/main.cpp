@@ -1,10 +1,11 @@
-#include <bitset>
+#include <bitset>   
 #include <random>
 #include <cmath>
 #include <iostream>
 #include <functional>
 #include <iterator>
 #include <vector>
+#include <algorithm>
 #include "../libs/gplot++.h"
 
 using namespace std;
@@ -44,6 +45,13 @@ class Population{
 public:
 
     constexpr Population(){}
+
+     sort_func = [](Genome a, Genome b) {return a.gene.to_ulong() > b; }
+    double get_best_point(){
+        auto sorted_pop = population;
+        
+        sort(sorted_pop.begin(),sorted_pop.end(), );  
+    }
 
     void setFunction(function<double(double)> fun){
         function = fun;
@@ -249,13 +257,39 @@ public:
     } 
 };
 
+void gen_benchmark(int population, double crossingover_p, double mutation_p){
+
+    double local_extr = 9.19424;
+
+    double low_c= 0.2;
+    double high_c= 0.8;
+    double step_c= 0.05;
+    double low_m= 0.005;
+    double high_m= 0.4;
+    double step_m = 0.05;
+    vector<vector<vector<double>>> results;
+    for( int pc = 0; pc<=population; pc++){
+        for(double c = low_c;c<=high_c;step_c++){
+            for(double m = low_m;m<=high_m;step_m++){
+                Population<1,10,3> pop ={};
+                pop.fill(pc);
+                pop.setFunction( [&pop](double x){return log(x)*cos(3*x-15);});
+                pop.setPCross(c);
+                pop.setPMut(m);
+
+
+            }
+        }
+    }
+}
+
 int main(){
     int n=0;
     Population<1,10,3> p ={};
     p.fill(100);
     
     p.setFunction( [&p](double x){return log(x)*cos(3*x-15);});
-    //p.function = [&p](double x){return x*x;};
+    //p.setFunction([&p](double x){return x*x;});
     //p.function = [&p](double x)->double {return (1.85-x)*cos(3.5*x-0.5);};
     p.setPMut(0.01);
     p.draw();

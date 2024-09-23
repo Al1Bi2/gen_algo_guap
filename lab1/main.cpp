@@ -9,7 +9,8 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
-//#include "../libs/gplot++.h"
+#include <fstream>
+#include "../libs/gplot++.h"
 
 using namespace std;
 
@@ -85,6 +86,7 @@ public:
     }
 
     void draw(){
+        Gnuplot plt{};
         std::vector<double> x,y;
         for(double i = min; i<max;i+=0.001){
             x.push_back(i);
@@ -118,7 +120,7 @@ private:
     vector<Genome>  population = {};
     vector<Genome> mid_population  ={};
 
-    Gnuplot plt{};
+    //Gnuplot plt{};
 
     double probability_crossingover = 0.5d;
     double probability_mutation = 0.01d;
@@ -284,7 +286,7 @@ void benchmark_worker(int pc, double c, double m, int steps, function<double(dou
                            
     
 
-    Population<1, 10, 3> pop = {};
+    Population<1, 10, 5> pop = {};
     pop.fill(pc);
     pop.setFunction(fun);
     pop.setPCross(c);
@@ -293,10 +295,12 @@ void benchmark_worker(int pc, double c, double m, int steps, function<double(dou
     
 
     double error = local_extr_v - fun(pop.get_best_point());
+    error*=error;
 
 
     {
         lock_guard<mutex> guard(results_mutex);
+        //cout<<"thread "<<pc<<c<<m<<" ended"<<endl;
         local_results.push_back({pc, c, m, error});
     }
 }
@@ -318,9 +322,8 @@ vector<tuple<int, double, double, double>> gen_benchmark(int population_min, int
     mutex results_mutex; 
 
     for( int pc = population_min; pc<=population_max; pc+=population_step){
-        for(double c = low_c;c<=high_c;step_c++){
-            for(double m = low_m;m<=high_m;step_m++){
-                
+        for(double c = low_c;c<=high_c;c += step_c){
+            for(double m = low_m;m<=high_m;m += step_m){
                threads.emplace_back(benchmark_worker,pc,c,m,steps,fun,local_extr_v,ref(results),ref(results_mutex));
             }
         }
@@ -335,16 +338,68 @@ vector<tuple<int, double, double, double>> gen_benchmark(int population_min, int
     cout << "Benchmark completed in " << duration.count() << " seconds." << endl;
     return results;
 }
+long estimateTotalIterations(int population_min, int population_max, int population_step,
+                            double low_c, double high_c, double step_c,
+                            double low_m, double high_m, double step_m) {
+    // Calculate the number of iterations for each parameter
+    long population_iterations = (population_max - population_min) / population_step + 1;
 
+    long crossover_iterations = static_cast<long>((high_c - low_c) / step_c) + 1;
+    long mutation_iterations = static_cast<long>((high_m - low_m) / step_m) + 1;
+
+    // Total iterations is the product of all iterations
+    return population_iterations * crossover_iterations * mutation_iterations;
+
+}
+void writeDataToFile(const string& filename, const vector<tuple<int, double, double, double>>& data) {
+    ofstream ofs(filename);
+    if (!ofs) {
+        cerr << "Error opening file for writing: " << filename << endl;
+        return;
+    }
+
+    for (const auto& entry : data) {
+        int id = get<0>(entry);
+        double x = get<1>(entry);
+        double y = get<2>(entry);
+        double color = get<3>(entry);
+        ofs << x << " " << y << " " << color << endl;
+    }
+    ofs.close();
+}
+void plotDataWithGnuplot(const string& filename) {
+    Gnuplot plt{};
+
+    plt.sendcommand("set palette defined (0 'blue', 1 'green', 2 'yellow', 3 'red'); "
+                                   "set cblabel 'Color Value'; "
+                                   "set xlabel 'X Axis'; "
+                                   "set ylabel 'Y Axis'; "
+                                   "set zlabel 'Z Axis'; "
+                                   "splot '" + filename + "' using 1:2:3 with points palette pointsize 2 title '3D Plot with Color'");
+
+
+}
 int main(){
-    auto results = gen_benchmark(10, 50, 2, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05, 100, 
-                                  [](double x) { return x * x; }, 9.19424);
+    const double time = double(135)/double(51272*20);
+    cout<<estimateTotalIterations(16, 1000, 4, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05)<<endl;
+    cout<<"Estimated time:"<<estimateTotalIterations(16, 1000, 4, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05)*time*20<<"'s"<<endl;
+    auto results = gen_benchmark(16, 1000, 4, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05, 20, 
+                                  [](double x) { return log(x)*cos(3*x-15); }, 9.19424);
+   
     
+    sort(results.begin(),results.end(),[](tuple<int, double, double, double> a,tuple<int, double, double, double> b){return get<3>(a)<get<3>(b);});
+    int cnt =0;
     for (const auto& result : results) {
         cout << "Population: " << get<0>(result)
              << ", Crossover: " << get<1>(result)
              << ", Mutation: " << get<2>(result)
              << ", Error: " << get<3>(result) << endl;
+        if(cnt++>=10){
+            break;
+        }
     }
+    writeDataToFile("results.txt",results);
+    plotDataWithGnuplot("results.txt");
+ 
     return 0;
 }

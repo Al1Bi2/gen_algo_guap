@@ -10,9 +10,12 @@
 #include <mutex>
 #include <chrono>
 #include <fstream>
+#include <array>
+#include <atomic>
 #include "../libs/gplot++.h"
 
 using namespace std;
+atomic<int> count_joined(0);
 
 random_device rnd;
 mt19937 gen(rnd());
@@ -58,7 +61,9 @@ public:
         sort(sorted_pop.begin(),sorted_pop.end(), sort_func);  
         return pos_to_real(sorted_pop.front().getGenome());
     }
-
+    double get_genome(int i){
+        return pos_to_real(population[i].getGenome());
+    }
     void setFunction(function<double(double)> fun){
         function = fun;
     }
@@ -85,6 +90,7 @@ public:
         }
     }
 
+
     void draw(){
         Gnuplot plt{};
         std::vector<double> x,y;
@@ -110,6 +116,7 @@ public:
 
 private:
     class Genome;
+
     static constexpr long lenght(){return static_cast<long>(log2((max-min)*pow(10,dad)))+1;};
     static constexpr long n(){return static_cast<long>(powl(2,lenght()));}
 
@@ -282,7 +289,7 @@ vector<double> generate_range(double low, double high, double step) {
 
 // Worker function to run the benchmark
 void benchmark_worker(int pc, double c, double m, int steps, function<double(double)> fun, double local_extr_v, 
-                      vector<tuple<int, double, double, double>>& local_results, mutex& results_mutex) {
+                      vector<tuple<int, double, double, double,double>>& local_results, mutex& results_mutex) {
                            
     
 
@@ -291,54 +298,56 @@ void benchmark_worker(int pc, double c, double m, int steps, function<double(dou
     pop.setFunction(fun);
     pop.setPCross(c);
     pop.setPMut(m);
-    pop.doSteps(steps);
-    
-
-    double error = local_extr_v - fun(pop.get_best_point());
-    error*=error;
-
-
-    {
-        lock_guard<mutex> guard(results_mutex);
-        //cout<<"thread "<<pc<<c<<m<<" ended"<<endl;
-        local_results.push_back({pc, c, m, error});
-    }
-}
-
-
-vector<tuple<int, double, double, double>> gen_benchmark(int population_min, int population_max,int population_step, double low_c, double high_c, double step_c, 
-                   double low_m, double high_m, double step_m, int steps, function<double(double)> fun, double fun_extr) {
-
-
-    double local_extr;
-    local_extr = fun_extr;
-    double local_extr_v = fun(local_extr);
-
-
+    int n = 0;
+    double last_error = 123456789;
+    int close_points = 0;
+    const double close_dist = (10-1)/double(100);
+    double best_point = pop.get_best_point();
     auto start_time = chrono::high_resolution_clock::now();
-
-    vector<tuple<int, double, double, double>> results; 
-    vector<thread> threads; 
-    mutex results_mutex; 
-
-    for( int pc = population_min; pc<=population_max; pc+=population_step){
-        for(double c = low_c;c<=high_c;c += step_c){
-            for(double m = low_m;m<=high_m;m += step_m){
-               threads.emplace_back(benchmark_worker,pc,c,m,steps,fun,local_extr_v,ref(results),ref(results_mutex));
+    while(n++<steps){
+        pop.step();
+        for(int i = 0;i<pc;i++){
+            double error = pop.get_genome(i) - best_point;
+            if(fabs(error) > close_dist*2) {
+                continue;
             }
-        }
-    }
+            if(abs(error)<close_dist){
+                close_points++;
+            }
+            if(close_points>=(pc*0.9)){
+            break;
+            }
+        } 
 
-     for (auto& thread : threads) {
-        thread.join();
+        if(close_points>=double(pc*0.9)+1){
+            break;
+        } 
+    
     }
     auto end_time = chrono::high_resolution_clock::now(); 
     chrono::duration<double> duration = end_time - start_time;
-
-    cout << "Benchmark completed in " << duration.count() << " seconds." << endl;
-    return results;
+    
+    double error = abs(fun(pop.get_best_point())-local_extr_v);
+    {
+        lock_guard<mutex> guard(results_mutex);
+        //cout<<"thread "<<pc<<c<<m<<" ended"<<endl;
+        local_results.push_back({pc, c, m,duration.count(),error});
+        
+    }
 }
-long estimateTotalIterations(int population_min, int population_max, int population_step,
+void monitor_progress(int total_threads) {
+    int percent_size = total_threads / 100;
+
+    
+    while (count_joined.load() < total_threads*0.8) {
+        cout << "Progress: " << count_joined.load() / percent_size << "%" << endl;
+        this_thread::sleep_for(chrono::milliseconds(500));  // Check every 500ms
+        int r = count_joined.load();
+        int r2=2+r;
+    }
+}
+
+long estimate_iterations(int population_min, int population_max, int population_step,
                             double low_c, double high_c, double step_c,
                             double low_m, double high_m, double step_m) {
     // Calculate the number of iterations for each parameter
@@ -351,55 +360,209 @@ long estimateTotalIterations(int population_min, int population_max, int populat
     return population_iterations * crossover_iterations * mutation_iterations;
 
 }
-void writeDataToFile(const string& filename, const vector<tuple<int, double, double, double>>& data) {
+vector<tuple<int, double, double, double,double>> gen_benchmark(int population_min, int population_max,int population_step, double low_c, double high_c, double step_c, 
+                   double low_m, double high_m, double step_m, int steps, function<double(double)> fun, double fun_extr) {
+
+
+    double local_extr;
+    local_extr = fun_extr;
+    double local_extr_v = fun(local_extr);
+
+
+    auto start_time = chrono::high_resolution_clock::now();
+
+    vector<tuple<int, double, double, double, double>> results; 
+    vector<thread> threads; 
+    mutex results_mutex; 
+    thread progress_thread(monitor_progress, estimate_iterations(population_min, population_max, population_step, low_c, high_c, step_c, low_m, high_m, step_m));
+    for( int pc = population_min; pc<=population_max; pc+=population_step){
+        for(double c = low_c;c<=high_c;c += step_c){
+            for(double m = low_m;m<=high_m;m += step_m){
+               threads.emplace_back(benchmark_worker,pc,c,m,steps,fun,local_extr_v,ref(results),ref(results_mutex));
+               count_joined++;
+            }
+        }
+    }
+    
+    for (auto& thread : threads) {
+        thread.join();
+    }
+    progress_thread.join();
+    auto end_time = chrono::high_resolution_clock::now(); 
+    chrono::duration<double> duration = end_time - start_time;
+
+    cout << "Benchmark completed in " << duration.count() << " seconds." << endl;
+    return results;
+}
+
+
+
+template <typename T>
+void write_to_file(const string& filename, const vector<T>& data) {
     ofstream ofs(filename);
     if (!ofs) {
         cerr << "Error opening file for writing: " << filename << endl;
         return;
     }
-
     for (const auto& entry : data) {
-        int id = get<0>(entry);
-        double x = get<1>(entry);
-        double y = get<2>(entry);
-        double color = get<3>(entry);
-        ofs << x << " " << y << " " << color << endl;
+            std::apply(
+                [&ofs](auto&&... args) {
+                    ((ofs << args << " "), ...);
+                    ofs << endl;
+                },
+                entry);
+        }
+        ofs.close();
     }
-    ofs.close();
-}
-void plotDataWithGnuplot(const string& filename) {
-    Gnuplot plt{};
 
-    plt.sendcommand("set palette defined (0 'blue', 1 'green', 2 'yellow', 3 'red'); "
-                                   "set cblabel 'Color Value'; "
-                                   "set xlabel 'X Axis'; "
-                                   "set ylabel 'Y Axis'; "
-                                   "set zlabel 'Z Axis'; "
-                                   "splot '" + filename + "' using 1:2:3 with points palette pointsize 2 title '3D Plot with Color'");
+void plot_gnu(const string& filename,const vector<int>& columns, const array<string,5>& titles, bool is_log=0) {
+    Gnuplot plt{};
+    string labels="";
+    string log="";
+    string plot_type = "";
+    string columns_str = "";
+    if(columns.size()==2){
+        labels = "set xlabel '"+titles[columns[0]]+"'; set ylabel '"+titles[columns[1]]+"'; ";
+        if(is_log){
+            log = "set logscale y; ";
+        }
+        plot_type= "plot";
+        columns_str=to_string(columns[0]+1)+":"+to_string(columns[1]+1)+":"+to_string(columns[1]+1);
+    }else if(columns.size()==3){
+        labels = "set xlabel '"+titles[columns[0]]+"'; set ylabel '"+titles[columns[1]]+"'; set zlabel '"+titles[columns[2]]+"'; ";
+        if(is_log){
+            log = "set logscale z; ";
+        }
+        plot_type= "splot";
+        columns_str=to_string(columns[0]+1)+":"+to_string(columns[1]+1)+":"+to_string(columns[2]+1);
+    }else{
+        cout<<"Wrong number of columns"<<endl;
+        return;
+    }
+    string result = "set palette defined (0 'blue', 1.00E-17 'green', 1.00E-10 'yellow',1.00E-8 'red'); "
+                                   "set cblabel 'Error Value'; "
+                                   +labels+" "
+                                   +log
+                                    +" set style fill solid 0.5 noborder; " 
+                                    +plot_type+" '" + "results.txt" + "' using "+ columns_str +  " with points  pt 1 ps 0.8 palette title '" + "GRAPH" + "'";
+    plt.sendcommand(result);
 
 
 }
 int main(){
-    const double time = double(135)/double(51272*20);
-    cout<<estimateTotalIterations(16, 1000, 4, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05)<<endl;
-    cout<<"Estimated time:"<<estimateTotalIterations(16, 1000, 4, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05)*time*20<<"'s"<<endl;
-    auto results = gen_benchmark(16, 1000, 4, 0.2, 0.8, 0.05, 0.005, 0.4, 0.05, 20, 
-                                  [](double x) { return log(x)*cos(3*x-15); }, 9.19424);
-   
-    
-    sort(results.begin(),results.end(),[](tuple<int, double, double, double> a,tuple<int, double, double, double> b){return get<3>(a)<get<3>(b);});
-    int cnt =0;
-    for (const auto& result : results) {
-        cout << "Population: " << get<0>(result)
-             << ", Crossover: " << get<1>(result)
-             << ", Mutation: " << get<2>(result)
-             << ", Error: " << get<3>(result) << endl;
-        if(cnt++>=10){
+    const array<string,5> columns_title = {"Population", "Crossingover", "Mutation","Time" ,"Error"};
+    const string filename1 = "3d_data1.txt";
+    const string filename2 = "3d_data2.txt";
+    const string filename3 = "3d_data3.txt";
+    int n=-1;
+    while(n!=9){
+        cout<<"Choose option:"<<endl;
+        cout<<"\t1)Recalculate benchmark and save to file"<<endl;
+        cout<<"\t2)Plot files"<<endl;
+        cout<<"\t3)Load individual simulation"<<endl;
+        cout<<"\t9)Exit"<<endl;
+        cin>>n;
+        switch(n){
+            case 1:
+            {
+                const double time = double(135)/double(51272*20);
+                int steps = 100;
+                int min_pop=2;
+                int max_pop = 500;
+                int step_pop = 2;
+                double min_cop=0.1;
+                double max_cop = 0.9;
+                double step_cop = 0.05;
+                double min_mp=0.0001;
+                double max_mp = 0.4;
+                double step_mp = 0.01;
+                auto fun = [](double x) { return log(x)*cos(3*x-15); };
+                double local_extr =9.19424;
+                long est_iterations = estimate_iterations(min_pop, max_pop, step_pop, min_cop, max_cop, step_cop, min_mp, max_mp, step_mp);
+                cout<<"Estimated iterations:"<<est_iterations<<endl;
+                cout<<"Estimated time:"<<est_iterations*time*steps<<"'s"<<endl;
+                auto results = gen_benchmark(min_pop, max_pop, step_pop, min_cop, max_cop, step_cop, min_mp, max_mp, step_mp, steps,fun,local_extr);
+                sort(results.begin(), results.end(),[](auto a,auto b){return get<3>(a)<get<3>(b);});
+                int cnt = 0;
+                cout<<"Top 20 results:"<<endl;
+                for (const auto& result : results) {
+                    cout << "Population: " << get<0>(result)
+                        << ", Crossover: " << get<1>(result)
+                        << ", Mutation: " << get<2>(result)
+                        << ", Error: " << get<3>(result) << endl;
+                    if(cnt++>=20){
+                        break;
+                    }
+                }
+                write_to_file<tuple<int, double, double, double,double>>("results.txt", results);
+                vector<tuple<double, double, double>> data1, data2, data3;
+                for (const auto& entry : results) {
+                    data1.emplace_back(get<0>(entry), get<1>(entry), get<3>(entry)); 
+                    data2.emplace_back(get<1>(entry), get<2>(entry), get<3>(entry)); 
+                    data3.emplace_back(get<2>(entry), get<0>(entry), get<3>(entry)); 
+                    }
+                
+                write_to_file<tuple<double, double, double>>("3d_data1.txt", data1);
+                write_to_file<tuple<double, double, double>>("3d_data2.txt", data2);
+                write_to_file<tuple<double, double, double>>("3d_data3.txt", data3);
+            }
             break;
+            case 2:{
+                cout<<"Enter column quantity:"<<endl;
+                int n;
+                cin>>n;
+                cout<<"Enter column numbers:"<<endl;
+                vector<int> columns;
+                for(int i=0;i<n;i++){
+                    int column;
+                    cin>>column;
+                    columns.push_back(column);
+                }
+                cout<<"Log or linear?"<<endl;
+                bool log;
+                cin>>log;
+                plot_gnu(filename1,columns,columns_title,log);
+                cout<<endl;
+                }
+            break;
+            case 3:{
+                
+                Population<1, 10, 5> pop = {};
+                int pop_size;
+                double cros_p, mut_p;
+                cout<<"Enter population size:"<<endl;
+                cin>>pop_size;
+                cout<<"Enter crossingover probability:"<<endl;
+                cin>>cros_p;
+                cout<<"Enter mutation probability:"<<endl;
+                cin>>mut_p;
+                pop.fill(pop_size);
+                pop.setFunction([](double x) { return log(x)*cos(3*x-15); });
+                pop.setPCross(cros_p);
+                pop.setPMut(mut_p);
+                cout<<"Starting simulation..."<<endl;
+                cout<<"Enter 0 to stop or 1 to continue: "<<endl;
+                int cont = 1;
+                while (cont != 0)
+                {
+                    pop.step();
+                    pop.draw();
+                    cin>>cont;
+                }
+                cout<<"Simulation ended."<<endl;
+
+                
+            }
+            break;
+            case 9:
+                return -1;
+            break;
+
+            default:
+                n=-1;
+                continue;
+
         }
     }
-    writeDataToFile("results.txt",results);
-    plotDataWithGnuplot("results.txt");
- 
     return 0;
 }

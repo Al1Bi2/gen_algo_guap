@@ -71,6 +71,18 @@
         "xtr1common": "cpp",
         "xlocmes": "cpp",
         "xlocmon": "cpp",
-        "xloctime": "cpp"
+        "xloctime": "cpp",
+        "fstream": "cpp",
+        "mutex": "cpp",
+        "chrono": "cpp",
+        "forward_list": "cpp",
+        "xtree": "cpp",
+        "iomanip": "cpp",
+        "locale": "cpp",
+        "ratio": "cpp",
+        "set": "cpp",
+        "stop_token": "cpp",
+        "thread": "cpp",
+        "xlocbuf": "cpp"
     }
 }

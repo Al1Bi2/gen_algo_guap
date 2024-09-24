@@ -301,7 +301,7 @@ void benchmark_worker(int pc, double c, double m, int steps, function<double(dou
     int n = 0;
     double last_error = 123456789;
     int close_points = 0;
-    const double close_dist = (10-1)/double(100);
+    const double close_dist = (10-1)/double(20);
     double best_point = pop.get_best_point();
     auto start_time = chrono::high_resolution_clock::now();
     while(n++<steps){
@@ -427,7 +427,7 @@ void plot_gnu(const string& filename,const vector<int>& columns, const array<str
             log = "set logscale y; ";
         }
         plot_type= "plot";
-        columns_str=to_string(columns[0]+1)+":"+to_string(columns[1]+1)+":"+to_string(columns[1]+1);
+        columns_str=to_string(columns[0]+1)+":"+to_string(columns[1]+1)+":"+to_string(5);
     }else if(columns.size()==3){
         labels = "set xlabel '"+titles[columns[0]]+"'; set ylabel '"+titles[columns[1]]+"'; set zlabel '"+titles[columns[2]]+"'; ";
         if(is_log){
@@ -514,15 +514,27 @@ int main(){
                 cout<<"Enter column numbers:"<<endl;
                 vector<int> columns;
                 for(int i=0;i<n;i++){
-                    int column;
+                    string column;
                     cin>>column;
-                    columns.push_back(column);
+                    if (column.find("(") != string::npos) {
+                        size_t start = column.find("(") + 1;
+                        size_t end = column.find(")");
+                        string val = column.substr(start, end - start);
+                        columns.push_back(stoi(val));
+                        string col = column.substr(0, start - 1);
+                        columns.push_back(stoi(col));
+                        
+                    } else {
+                        columns.push_back(stoi(column));
+                    }
                 }
                 cout<<"Log or linear?"<<endl;
                 bool log;
                 cin>>log;
                 plot_gnu(filename1,columns,columns_title,log);
+                cout.flush();
                 cout<<endl;
+
                 }
             break;
             case 3:{
@@ -530,26 +542,33 @@ int main(){
                 Population<1, 10, 5> pop = {};
                 int pop_size;
                 double cros_p, mut_p;
+                double local_extr =9.19424;
                 cout<<"Enter population size:"<<endl;
                 cin>>pop_size;
                 cout<<"Enter crossingover probability:"<<endl;
+                cout.flush();
                 cin>>cros_p;
                 cout<<"Enter mutation probability:"<<endl;
                 cin>>mut_p;
                 pop.fill(pop_size);
-                pop.setFunction([](double x) { return log(x)*cos(3*x-15); });
+                auto function = [](double x) { return log(x)*cos(3*x-15); };
+                pop.setFunction(function);
                 pop.setPCross(cros_p);
                 pop.setPMut(mut_p);
                 cout<<"Starting simulation..."<<endl;
-                cout<<"Enter 0 to stop or 1 to continue: "<<endl;
+                cout<<local_extr<<", "<<function(local_extr)<<endl;
+                cout<<"Best point: "<<pop.get_best_point()<<":"<<function(pop.get_best_point())<<endl;
+                cout<<"Enter 0 to stop or n to do n steps: "<<endl;
                 int cont = 1;
                 while (cont != 0)
                 {
-                    pop.step();
+                    pop.doSteps(cont);
                     pop.draw();
+                    cout<<"Best point: "<<pop.get_best_point()<<":"<<function(pop.get_best_point())<<endl;
                     cin>>cont;
                 }
-                cout<<"Simulation ended."<<endl;
+                cout<<"Simulation ended."<<endl;\
+                
 
                 
             }

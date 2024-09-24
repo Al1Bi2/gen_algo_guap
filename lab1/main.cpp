@@ -109,6 +109,7 @@ public:
         plt.plot(px, py, "Dataset #2", Gnuplot::LineStyle::POINTS);
 
         plt.show();
+        cout.flush();
     }
 
     void setPCross(double p){probability_crossingover = p;}
@@ -434,19 +435,19 @@ void plot_gnu(const string& filename,const vector<int>& columns, const array<str
             log = "set logscale z; ";
         }
         plot_type= "splot";
-        columns_str=to_string(columns[0]+1)+":"+to_string(columns[1]+1)+":"+to_string(columns[2]+1);
+        columns_str=to_string(columns[0]+1)+":"+to_string(columns[1]+1)+":"+to_string(columns[2]+1)+":"+to_string(5);
     }else{
         cout<<"Wrong number of columns"<<endl;
         return;
     }
-    string result = "set palette defined (0 'blue', 1.00E-17 'green', 1.00E-10 'yellow',1.00E-8 'red'); "
+    string result = " set palette defined (0 'blue', 1.00E-17 'green', 1.00E-10 'yellow',1.00E-8 'red'); "
                                    "set cblabel 'Error Value'; "
                                    +labels+" "
                                    +log
                                     +" set style fill solid 0.5 noborder; " 
-                                    +plot_type+" '" + "results.txt" + "' using "+ columns_str +  " with points  pt 1 ps 0.8 palette title '" + "GRAPH" + "'";
+                                    +plot_type+" '" + filename + "' using "+ columns_str +  " with points  pt 1 ps 0.8 palette title '" + "GRAPH" + "'";
     plt.sendcommand(result);
-
+    cout.flush();
 
 }
 int main(){
@@ -495,16 +496,7 @@ int main(){
                     }
                 }
                 write_to_file<tuple<int, double, double, double,double>>("results.txt", results);
-                vector<tuple<double, double, double>> data1, data2, data3;
-                for (const auto& entry : results) {
-                    data1.emplace_back(get<0>(entry), get<1>(entry), get<3>(entry)); 
-                    data2.emplace_back(get<1>(entry), get<2>(entry), get<3>(entry)); 
-                    data3.emplace_back(get<2>(entry), get<0>(entry), get<3>(entry)); 
-                    }
                 
-                write_to_file<tuple<double, double, double>>("3d_data1.txt", data1);
-                write_to_file<tuple<double, double, double>>("3d_data2.txt", data2);
-                write_to_file<tuple<double, double, double>>("3d_data3.txt", data3);
             }
             break;
             case 2:{
@@ -531,7 +523,7 @@ int main(){
                 cout<<"Log or linear?"<<endl;
                 bool log;
                 cin>>log;
-                plot_gnu(filename1,columns,columns_title,log);
+                plot_gnu("results.txt",columns,columns_title,log);
                 cout.flush();
                 cout<<endl;
 

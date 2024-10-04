@@ -87,6 +87,8 @@
         "complex": "cpp",
         "condition_variable": "cpp",
         "semaphore": "cpp",
-        "execution": "cpp"
+        "execution": "cpp",
+        "queue": "cpp",
+        "ranges": "cpp"
     }
 }

@@ -10,10 +10,12 @@
 #include "genetic.hpp"
 
 
+
 int main(){
 ///TODO: СКОПИРОВАТЬ НАХУЙ С ПЕРВОЙ ЛАБЫ ДОБАВИТЬ ШАБЛОН ПОД РАЗНЫЕ ТИПА ГЕНОВ И ЗАСУНУТЬ В ХПП
 
-    //plt.sendcommand(cmd);
-
+    
+    gen::population<gen::genome::BGA<2>> pop={};
+    
     return 0;
 }

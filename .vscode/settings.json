@@ -83,6 +83,10 @@
         "set": "cpp",
         "stop_token": "cpp",
         "thread": "cpp",
-        "xlocbuf": "cpp"
+        "xlocbuf": "cpp",
+        "complex": "cpp",
+        "condition_variable": "cpp",
+        "semaphore": "cpp",
+        "execution": "cpp"
     }
 }

@@ -1,0 +1,53 @@
+set isosamples 25,25
+set xyplane at 0
+unset key
+
+set palette rgbformulae 31,-11,32
+set style fill solid 0.5
+set cbrange [-1:1]
+
+set title "Mixing pm3d surfaces with hidden-line plots"
+
+f(x, y) = 418.9829*2 - (x * sin(sqrt(abs(x))) + y * sin(sqrt(abs(y))))
+
+set hidden3d front
+splot f(x,y) with pm3d, x*x-y*y with lines lc rgb "black"
+
+unset arrow
+unset label
+
+set grid
+set xrange [-500:500]
+set yrange [-500:500]
+set zrange [-1000:1000]
+set isosamples 80
+set samples 50
+set hidden3d
+set title "Hidden line removal of explicit surfaces"
+splot  ((-x) * sin(sqrt(abs(x))) + (-y) * sin(sqrt(abs(y))))
+
+
+
+
+# Set grid, range, and titles
+set grid
+set xrange [-500:500]
+set yrange [-500:500]
+set zrange [-1000:1000]
+set isosamples 100
+set samples 100
+set hidden3d back offset 1 trianglepattern 3 undefined 1 
+set contour base
+set title "Schwefel Function with Color and Contours at z = -1000"
+
+# Define the function
+f(x, y) = (-x) * sin(sqrt(abs(x))) + (-y) * sin(sqrt(abs(y)))
+
+# Define the height for the slice
+z_val = -1000
+
+# Increase the contour steps (levels)
+set cntrparam levels incremental -1000, 100, 1000  # Define contour steps from -1000 to 1000 with step 100
+
+# Plot the function in 3D and add the contour plot
+splot f(x, y) with pm3d title "Schwefel function surface"

@@ -24,9 +24,9 @@ void draw(const std::string &filename){
     Gnuplot plt{};
     std::string result = R"(
 set grid
-set xrange [-6:6]
-set yrange [-6:6]
-set zrange [0:40]
+set xrange [-500:500]
+set yrange [-500:500]
+set zrange [-1000:1000]
 set isosamples 100
 set samples 100
 
@@ -35,7 +35,7 @@ set contour base
 
 
 # Define the function
-f(x, y) = x*x+y*y
+f(x, y) = (-x) * sin(sqrt(abs(x))) + (-y) * sin(sqrt(abs(y)))
 set cntrparam levels incremental -1000, 100, 1000  # Define contour steps from -1000 to 1000 with step 100
 
 # Plot the function in 3D and add the contour plot
@@ -59,10 +59,10 @@ int main(){
     }
     return sum;
     };
-    gen::GA ga(gen::genome::RGA<2>(),gen::reproduction::roulette{gen::reproduction::EXTREMUM::MIN},gen::mutation::non_uniform{0.5,-5.12,5.12},gen::crossover::RGA::SBX{5});
+    gen::GA ga(gen::genome::RGA<2>(),gen::reproduction::roulette{},gen::mutation::non_uniform{0.5,-500,500},gen::crossover::RGA::SBX{5},gen::reproduction::EXTREMUM::MIN);
     ga.set_population_size(10);
-    ga.fill({-5.12,-5.12},{5.12,5.12});
-    ga.set_algo(dejongs);
+    ga.fill({-500,-500},{500,500});
+    ga.set_algo(schwefel);
 
     ga.calculate_fitness();
         auto result = ga.get_population();

@@ -131,9 +131,9 @@ namespace gen{
                         double beta;
         
                         if (u <= 0.5) {
-                            beta = pow(2 * u + (1 - 2 * u) * pow(1 - u, eta), 1.0 / (eta + 1.0));
+                            beta = pow(2 * u/* + (1 - 2 * u) * pow(1 - u, eta)*/, 1.0 / (eta + 1.0));
                         } else {
-                            beta = pow(1 / (2 * (1 - u) + 2 * (u - 0.5) * pow(1 - u, eta)), 1.0 / (eta + 1.0));
+                            beta = pow(1 / (2 * (1 - u) /*+ 2 * (u - 0.5) * pow(1 - u, eta)*/), 1.0 / (eta + 1.0));
                         }
                         child1[i] = 0.5 * ((1 + beta) * parent1[i] + (1 - beta) * parent2[i]);
                         child2[i] = 0.5 * ((1 - beta) * parent1[i] + (1 + beta) * parent2[i]);
@@ -205,51 +205,76 @@ namespace gen{
     class population{
     public:
         
-        population(): popul(),fitness(){};
-        population(size_t size): popul(size),fitness(size){};
+        population(): popul(){};
+        population(size_t size): popul(size){};
+        std::vector<std::pair<T,double>> get(){
+            return popul;
+        }
         size_t size(){
             return popul.size();
         }
         T& at(size_t idx){
-            return popul[idx];
+            return popul[idx].first;
         }
         double& fit_at(size_t idx){
-            return fitness[idx];
+            return popul[idx].second;
         }
         void push_back(T elem){
-            popul.push_back(elem);
-            fitness.push_back(0.0);
+            popul.push_back({elem,0.0});
+
+        }
+        void append_range(population& other){
+            auto other_content  =other.get();
+            int old_size = this->size();
+            this->resize(old_size+other.size());
+            for(int i = old_size; i< this->size();i++){
+                popul[i] = other_content[i-old_size];
+            }
+            //popul.append_range(other.get());
         }
         void fill(std::vector<double> min,std::vector<double> max){
             for(int i = 0;i<popul.size();i++){
-                popul[i].rnd(min,max);
-                fitness[i] = 0;
+                popul[i].first.rnd(min,max);
+                popul[i].second = 0;
             }
         }
         void resize(size_t size){
             popul.resize(size);
-            fitness.resize(size);
+        }
+        void clear(){
+            popul.clear();
         }
         std::pair<T,double> best(gen::reproduction::EXTREMUM dir = gen::reproduction::EXTREMUM::MAX){
             size_t best_idx  = -1;
             double best_fitness=dir == gen::reproduction::EXTREMUM::MAX ? std::numeric_limits<double>::min() : std::numeric_limits<double>::max();
             for(int i = 0;i<this->size();i++){
-                bool is_better = dir == gen::reproduction::EXTREMUM::MAX ? fitness[i] > best_fitness : fitness[i] < best_fitness;
+                bool is_better = dir == gen::reproduction::EXTREMUM::MAX ? popul[i].second > best_fitness : popul[i].second < best_fitness;
                 if(is_better){
                     best_idx = i;
-                    best_fitness = fitness[i];
+                    best_fitness = popul[i].second;
                 }
             }
-            return {popul[best_idx],fitness[best_idx]};
+            return popul[best_idx];
         }
         void print(){
             for(int i = 0;i<this->size();i++){
                 std::cout<<popul[i].get()[0]<<":"<<popul[i].get()[1]<<std::endl;
             }
         }
+        void sort(gen::reproduction::EXTREMUM dir = gen::reproduction::EXTREMUM::MAX){
+            auto comp = [dir](std::pair<T,double> a,std::pair<T,double> b){return dir== gen::reproduction::EXTREMUM::MAX ? a.second>b.second:a.second<b.second;};
+            std::sort(popul.begin(),popul.end(), comp);
+        }
+        std::vector<double> get_fit(){
+            std::vector<double> res;
+            for(auto& elem: popul){
+                res.push_back(elem.second);
+            }
+            return res;
+        }
     public:
-        std::vector<T> popul;
-        std::vector<double> fitness;
+        std::vector<std::pair<T,double>> popul;
+
 
     };
 
@@ -269,13 +294,15 @@ namespace gen{
         std::vector<double> min_borders;
         std::vector<double> max_borders;
         std::function<double(const std::vector<double>)> algo;
+        gen::reproduction::EXTREMUM dir;
 
-
-        GA<GeneType,ReproductionPolicy,MutationPolicy,CrossoverPolicy>(GeneType gt, ReproductionPolicy rp, MutationPolicy mp, CrossoverPolicy cp){
+        GA<GeneType,ReproductionPolicy,MutationPolicy,CrossoverPolicy>(GeneType gt, ReproductionPolicy rp, MutationPolicy mp, CrossoverPolicy cp, gen::reproduction::EXTREMUM dir = gen::reproduction::EXTREMUM::MAX){
             population_size = 20;
             population = gen::population<GeneType>(population_size);
             new_population = gen::population<GeneType>(population_size);
+            this->dir = dir;
             reproduction_p =rp;
+            reproduction_p.dir = dir;
             mutation_p = mp;
             crossover_p= cp;
         }
@@ -297,14 +324,14 @@ namespace gen{
             if (!algo) {
                 throw std::runtime_error("Fitness algorithm (algo) not set.");
             }
-            for(int i =0; i< population_size; i++){
+            for(int i =0; i< population.size(); i++){
                 population.fit_at(i) = algo(population.at(i).get());
             }
         }
 
 
         std::pair<GeneType&,GeneType&> reproduct(){
-            std::pair<size_t, size_t> parents_idx = reproduction_p.doit(population.fitness);
+            std::pair<size_t, size_t> parents_idx = reproduction_p.doit(population.get_fit());
             return { population.at(parents_idx.first), population.at(parents_idx.second) };
         }
         void crossover(){
@@ -326,14 +353,19 @@ namespace gen{
                 mutation_p.doit(new_population.at(i).get(),current_step,max_step);
             }
         }
+        void reduce(){
+            calculate_fitness();
+            population.sort(dir);
+            population.resize(population_size);
+            
+        }
         void doit(){
             calculate_fitness();
             crossover();
      
             mutate();
-     
-            population = new_population;
-            calculate_fitness();
+            population.append_range(new_population);
+            reduce();
 
             
             current_step++;
@@ -346,7 +378,7 @@ namespace gen{
         std::vector<std::pair<GeneType,double>> get_population(){
             std::vector<std::pair<GeneType,double>> ret;
             for(int i = 0; i< population.size();i++){
-                ret.push_back({population.at(i),population.fitness.at(i)});
+                ret.push_back({population.at(i),population.fit_at(i)});
             }
             return ret;
         }

@@ -16,36 +16,73 @@ namespace gen{
     }
 
     
-long random_long(long min, long max){
-    std::uniform_int_distribution<long> distrib(min, max);
-    return distrib(gen);
-}
+    long random_long(long min, long max){
+        std::uniform_int_distribution<long> distrib(min, max);
+        return distrib(gen);
+    }
     
     namespace reproduction{
+        enum  EXTREMUM{
+            MAX = 1,
+            MIN = -1
+        };
         class roulette{
+        public:
+            EXTREMUM dir;
+            roulette(EXTREMUM dir = EXTREMUM::MAX):dir(dir){};
 
+            std::pair<size_t,size_t> doit(const std::vector<double>& fitness){
+                double sum = 0;
+                double max = *std::max_element(fitness.begin(),fitness.end());
+                double min = *std::min_element(fitness.begin(),fitness.end());
+                for (double v : fitness) {
+                    sum += dir == EXTREMUM::MAX ? v - min : max - v;
+                }
+                double r = random_double(0.0, sum);
+                double current_sum = 0;
+                size_t idx1 = 0, idx2 = 0;
+                for (size_t i = 0; i < fitness.size(); i++) {
+                    current_sum += dir == EXTREMUM::MAX ? fitness[i] - min : max - fitness[i];
+                    if (r < current_sum) {
+                        idx1 = i;
+                        break;
+                    }
+                }
+                r = random_double(0.0, sum);
+                current_sum = 0;
+                for (size_t i = 0; i < fitness.size(); i++) {
+                    current_sum += dir == EXTREMUM::MAX ? fitness[i] - min : max - fitness[i];
+                    if (r < current_sum) {
+                        idx2 = i;
+                        break;
+                    }
+                    
+                }
+                
+                return {idx1,idx2};
+            }
         };
         class tournament{
         public:
             size_t tournament_size;
-            tournament(size_t ts = 3):tournament_size(ts){};
-
+            EXTREMUM dir;
+            tournament(size_t ts = 3,EXTREMUM dir = EXTREMUM::MAX):tournament_size(ts),dir(dir){};
+            
             std::pair<size_t,size_t> doit(const std::vector<double>& fitness){
                 std::vector<size_t> candidates;
                 size_t size = fitness.size();
                 for (size_t i = 0; i < tournament_size; i++) {
                     candidates.push_back(random_long(0, size - 1));
                 }
-
+                auto lambda  = [&fitness, this](size_t a, size_t b) {
+                    return this->dir == EXTREMUM::MIN ? fitness[a] > fitness[b] : fitness[a] < fitness[b];
+                };
+                
                 size_t parent1_idx = *std::max_element(candidates.begin(), candidates.end(),
-                    [&fitness](size_t a, size_t b) {
-                        return fitness[a] < fitness[b];
-                    });
+                    lambda);
                 candidates.erase(std::remove(candidates.begin(), candidates.end(), parent1_idx), candidates.end());
                 size_t parent2_idx = *std::max_element(candidates.begin(), candidates.end(),
-                    [&fitness](size_t a, size_t b) {
-                        return fitness[a] < fitness[b];
-                    });
+                    lambda);
 
                 return { parent1_idx, parent2_idx };
             }
@@ -55,10 +92,33 @@ long random_long(long min, long max){
     namespace crossover{
         namespace RGA{
 
+            class BLX{
+            public:
+                double alpha;
+                BLX(double alpha = 0.5):alpha(alpha){};
+
+                void doit(const std::vector<double>& parent1, const std::vector<double>& parent2, std::vector<double>& child1, std::vector<double>& child2){
+                    //std::vector<double> c1(a.size()), c2(a.size());
+                    int n = parent1.size();
+                    child1.resize(n);
+                    child2.resize(n);
+                    for(size_t i = 0; i < parent1.size(); i++){
+                        double cmin = std::min(parent1[i],parent2[i]);
+                        double cmax = std::max(parent1[i],parent2[i]);
+                        double di = cmax - cmin;
+                        child1[i] = cmin + random_double(-alpha*di, (1+alpha)*di);
+                        child2[i] = cmin + random_double(-alpha*di, (1+alpha)*di);
+                    }
+                    //return {c1, c2};
+                }
+
+            };
             class SBX{
             public:
                 double eta;
+                
                 SBX(double eta=2):eta(eta){};
+
 
                 void doit(const std::vector<double>& parent1,const std::vector<double>& parent2,
                                 std::vector<double>& child1, std::vector<double>& child2){
@@ -94,23 +154,27 @@ long random_long(long min, long max){
             double max_value;     
             double eta;         
 
-            non_uniform(double mutation_rate = 0.01, double min_value = 0.0, double max_value = 1.0, double eta = 20.0)
+            non_uniform(double mutation_rate = 0.01, double min_value = 0.0, double max_value = 1.0, double eta = 5.0)
                 : mutation_rate(mutation_rate), min_value(min_value), max_value(max_value), eta(eta) {}
 
             
             void doit(std::vector<double>& genotype, size_t generation, size_t max_generations) {
-                for (size_t i = 0; i < genotype.size(); ++i) {
-                    if (random_double(0.0, 1.0) < mutation_rate) {
-                        double delta = (max_value - min_value) * (1.0 - generation / static_cast<double>(max_generations));
-                        double random_value = random_double(-delta, delta);
-                        
-                        // Применяем мутацию с уменьшением интенсивности
-                        genotype[i] += random_value;
-                        
-                        // Ограничиваем новое значение гена диапазоном [min_value, max_value]
-                        if (genotype[i] < min_value) genotype[i] = min_value;
-                        if (genotype[i] > max_value) genotype[i] = max_value;
-                    }
+                int idx = random_long(0, genotype.size() - 1);
+                int dir = random_long(0, 1);
+                double diff;
+                
+                double r = random_double(0.0, 1.0);
+                double delta = (1-pow(r, pow(1-generation/max_generations, eta)));
+                if(dir){
+                    diff = -(genotype[idx] - min_value);
+                }else{
+                    diff = max_value - genotype[idx];
+                }
+                genotype[idx] += delta * diff;
+                if(genotype[idx] < min_value){
+                    genotype[idx] = min_value;
+                }else if(genotype[idx] > max_value){
+                    genotype[idx] = max_value;
                 }
             }
         };
@@ -166,20 +230,21 @@ long random_long(long min, long max){
             popul.resize(size);
             fitness.resize(size);
         }
-        std::pair<T,double> best(){
+        std::pair<T,double> best(gen::reproduction::EXTREMUM dir = gen::reproduction::EXTREMUM::MAX){
             size_t best_idx  = -1;
-            double best_fitness=std::numeric_limits<double>::min();
+            double best_fitness=dir == gen::reproduction::EXTREMUM::MAX ? std::numeric_limits<double>::min() : std::numeric_limits<double>::max();
             for(int i = 0;i<this->size();i++){
-                if(fitness[i]> best_fitness){
+                bool is_better = dir == gen::reproduction::EXTREMUM::MAX ? fitness[i] > best_fitness : fitness[i] < best_fitness;
+                if(is_better){
+                    best_idx = i;
                     best_fitness = fitness[i];
-                    best_idx=i;
                 }
             }
             return {popul[best_idx],fitness[best_idx]};
         }
         void print(){
             for(int i = 0;i<this->size();i++){
-                std::cout<<popul[i].get()[0]<<":"<<fitness[i]<<std::endl;
+                std::cout<<popul[i].get()[0]<<":"<<popul[i].get()[1]<<std::endl;
             }
         }
     public:
@@ -188,15 +253,8 @@ long random_long(long min, long max){
 
     };
 
-    template <typename T>
-    class algo{
-    public:
-        algo(){};
-        population<T> p;
-        
 
-
-    };
+    
     template<typename GeneType,typename ReproductionPolicy, typename MutationPolicy, typename CrossoverPolicy>
     class GA{
     public:
@@ -212,6 +270,7 @@ long random_long(long min, long max){
         std::vector<double> max_borders;
         std::function<double(const std::vector<double>)> algo;
 
+
         GA<GeneType,ReproductionPolicy,MutationPolicy,CrossoverPolicy>(GeneType gt, ReproductionPolicy rp, MutationPolicy mp, CrossoverPolicy cp){
             population_size = 20;
             population = gen::population<GeneType>(population_size);
@@ -219,27 +278,30 @@ long random_long(long min, long max){
             reproduction_p =rp;
             mutation_p = mp;
             crossover_p= cp;
-            
         }
-        void set_popuation_size(int size){
+        void set_population_size(int size){
             this->population_size=size;
             population.resize(population_size);
             new_population.resize(population_size);
         }
+        void set_algo(std::function<double(std::vector<double>)> algo){
+                this->algo = algo;           
+        }
         void fill(std::vector<double> min, std::vector<double> max){
             population.fill(min,max);
             this->min_borders = min;
-            this->max_borders = max;
-            
+            this->max_borders = max;          
         }
-        void set_algo(std::function<double(std::vector<double>)> algo){
-            this->algo = algo;
-        }
+       
         void calculate_fitness(){
-            for(int i =0; i< 20; i++){
+            if (!algo) {
+                throw std::runtime_error("Fitness algorithm (algo) not set.");
+            }
+            for(int i =0; i< population_size; i++){
                 population.fit_at(i) = algo(population.at(i).get());
             }
         }
+
 
         std::pair<GeneType&,GeneType&> reproduct(){
             std::pair<size_t, size_t> parents_idx = reproduction_p.doit(population.fitness);
@@ -247,32 +309,33 @@ long random_long(long min, long max){
         }
         void crossover(){
             int n = population.size();
+             std::vector<std::vector<double>> v;
             for(int i = 0; i< n/2; i++){
                 std::vector<double> child1, child2;
                 const std::pair<GeneType&,GeneType&> parents = reproduct();
-
+                v.push_back(parents.first.get());
+                 v.push_back(parents.first.get());
                 crossover_p.doit(parents.first.get(),parents.second.get(),child1,child2);
-                new_population.at(i) = GeneType(child1);
-                new_population.at(i+1)=GeneType(child2); 
+                new_population.at(i*2) = GeneType(child1);
+                new_population.at(i*2+1)=GeneType(child2); 
             }
-        }
+        }       
+        
         void mutate(){
             for(int i = 0; i< population.size();i++){
-                mutation_p.doit(population.at(i).get(),current_step,max_step);
+                mutation_p.doit(new_population.at(i).get(),current_step,max_step);
             }
         }
         void doit(){
             calculate_fitness();
             crossover();
-            new_population.print();
-            std::cout<<"+++++++++++++"<<std::endl;
+     
             mutate();
-            new_population.print();
-            std::cout<<"+++++++++++++"<<std::endl;
+     
             population = new_population;
             calculate_fitness();
-            population.print();
-            std::cout<<"+++++++++++++"<<std::endl;
+
+            
             current_step++;
         }
         void doit(size_t n){
@@ -280,5 +343,11 @@ long random_long(long min, long max){
                 doit();
             }
         }
-    };
-}
+        std::vector<std::pair<GeneType,double>> get_population(){
+            std::vector<std::pair<GeneType,double>> ret;
+            for(int i = 0; i< population.size();i++){
+                ret.push_back({population.at(i),population.fitness.at(i)});
+            }
+            return ret;
+        }
+    };}

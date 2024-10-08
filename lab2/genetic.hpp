@@ -154,8 +154,8 @@ namespace gen{
             double max_value;     
             double eta;         
 
-            non_uniform(double mutation_rate = 0.01, double min_value = 0.0, double max_value = 1.0, double eta = 5.0)
-                : mutation_rate(mutation_rate), min_value(min_value), max_value(max_value), eta(eta) {}
+            non_uniform(double min_value = 0.0, double max_value = 1.0, double eta = 5.0)
+                :  min_value(min_value), max_value(max_value), eta(eta) {}
 
             
             void doit(std::vector<double>& genotype, size_t generation, size_t max_generations) {
@@ -171,11 +171,7 @@ namespace gen{
                     diff = max_value - genotype[idx];
                 }
                 genotype[idx] += delta * diff;
-                if(genotype[idx] < min_value){
-                    genotype[idx] = min_value;
-                }else if(genotype[idx] > max_value){
-                    genotype[idx] = max_value;
-                }
+
             }
         };
     }
@@ -258,7 +254,7 @@ namespace gen{
         }
         void print(){
             for(int i = 0;i<this->size();i++){
-                std::cout<<popul[i].get()[0]<<":"<<popul[i].get()[1]<<std::endl;
+               std::cout<<" ("<<popul[i].first.get()[0]<<","<<popul[i].first.get()[1]<<"):"<<popul[i].second<<std::endl;
             }
         }
         void sort(gen::reproduction::EXTREMUM dir = gen::reproduction::EXTREMUM::MAX){
@@ -271,6 +267,13 @@ namespace gen{
                 res.push_back(elem.second);
             }
             return res;
+        }
+        void clamp(std::vector<double> min, std::vector<double> max){
+            for(auto& elem: popul){
+                for(int i = 0;i<elem.first.get().size();i++){
+                    elem.first.get()[i] = std::clamp(elem.first.get()[i],min[i],max[i]);
+                }
+            }
         }
     public:
         std::vector<std::pair<T,double>> popul;
@@ -317,7 +320,7 @@ namespace gen{
         void fill(std::vector<double> min, std::vector<double> max){
             population.fill(min,max);
             this->min_borders = min;
-            this->max_borders = max;          
+            this->max_borders = max;         
         }
        
         void calculate_fitness(){
@@ -349,6 +352,7 @@ namespace gen{
         }       
         
         void mutate(){
+
             for(int i = 0; i< population.size();i++){
                 mutation_p.doit(new_population.at(i).get(),current_step,max_step);
             }
@@ -356,15 +360,24 @@ namespace gen{
         void reduce(){
             calculate_fitness();
             population.sort(dir);
+            population.resize(10);
+            population.append_range(new_population);
+            calculate_fitness();
+            population.sort(dir);
+            population.clamp(min_borders,max_borders);
+
+            
+            //population.print();
             population.resize(population_size);
             
         }
+
         void doit(){
             calculate_fitness();
             crossover();
      
             mutate();
-            population.append_range(new_population);
+            
             reduce();
 
             

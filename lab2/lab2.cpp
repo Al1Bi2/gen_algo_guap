@@ -59,7 +59,8 @@ int main(){
     }
     return sum;
     };
-    gen::GA ga(gen::genome::RGA<2>(),gen::reproduction::roulette{},gen::mutation::non_uniform{0.5,-500,500},gen::crossover::RGA::SBX{5},gen::reproduction::EXTREMUM::MIN);
+    gen::GA ga(gen::genome::RGA<2>(),gen::reproduction::roulette{},gen::mutation::non_uniform{0.5,-500,500},
+            gen::crossover::RGA::SBX{5},gen::reproduction::EXTREMUM::MIN);
     ga.set_population_size(10);
     ga.fill({-500,-500},{500,500});
     ga.set_algo(schwefel);

@@ -7,6 +7,7 @@
 #include <functional>
 #include <random>
 #include <utility>
+///TODO:FUCKING REWRITE SHIT TO NOT USE  STDVECTOR<DOUBLE>
 namespace gen{
     static std::random_device rd;
     static std::mt19937 gen(rd());
@@ -62,6 +63,7 @@ namespace gen{
                 return {idx1,idx2};
             }
         };
+        
         class tournament{
         public:
             size_t tournament_size;
@@ -145,20 +147,76 @@ namespace gen{
 
             
         }
+        namespace salesman{
+            class heuristic{
+            public:
+            std::vector<std::vector<double>>& distance_matrix;  
+
+          
+            void doit(const std::vector<int>& parent1, const std::vector<int>& parent2, 
+                      std::vector<int>& child1, std::vector<int>& child2) {
+                int n = parent1.size();
+                child1.resize(n);
+                child2.resize(n);
+
+                std::vector<bool> used1(n, false), used2(n, false);
+
+                // Жадный выбор для потомков
+                int start_city = random_long(0, n - 1);
+                child1[0] = start_city;
+                child2[0] = start_city;
+                used1[start_city] = true;
+                used2[start_city] = true;
+
+                for (int i = 1; i < n; ++i) {
+                    int city1 = child1[i - 1];
+                    double min_dist1 = std::numeric_limits<double>::max();
+                    int next_city1 = -1;
+
+                    // Находим наиболее короткое ребро для child1 от родителя 1
+                    for (int j = 0; j < n; ++j) {
+                        if (!used1[j] && distance_matrix[city1][j] < min_dist1) {
+                            min_dist1 = distance_matrix[city1][j];
+                            next_city1 = j;
+                        }
+                    }
+                    child1[i] = next_city1;
+                    used1[next_city1] = true;
+
+                    // Находим наиболее короткое ребро для child2 от родителя 2
+                    int city2 = child2[i - 1];
+                    double min_dist2 = std::numeric_limits<double>::max();
+                    int next_city2 = -1;
+
+                    for (int j = 0; j < n; ++j) {
+                        if (!used2[j] && distance_matrix[city2][j] < min_dist2) {
+                            min_dist2 = distance_matrix[city2][j];
+                            next_city2 = j;
+                        }
+                    }
+                    child2[i] = next_city2;
+                    used2[next_city2] = true;
+                }
+            }
+            };
+        }
     }
     namespace mutation{
+        
         class non_uniform{
         public:
             double mutation_rate; 
             double min_value;    
             double max_value;     
             double eta;         
+            size_t max_generations;
+            size_t generation = 0;;
 
-            non_uniform(double min_value = 0.0, double max_value = 1.0, double eta = 5.0)
-                :  min_value(min_value), max_value(max_value), eta(eta) {}
+            non_uniform( double eta = 5.0,size_t max_generations= 100)
+                :  min_value(min_value), max_value(max_value), eta(eta), max_generations(max_generations),generation(0){}
 
             
-            void doit(std::vector<double>& genotype, size_t generation, size_t max_generations) {
+            void doit(std::vector<double>& genotype) {
                 int idx = random_long(0, genotype.size() - 1);
                 int dir = random_long(0, 1);
                 double diff;
@@ -171,7 +229,24 @@ namespace gen{
                     diff = max_value - genotype[idx];
                 }
                 genotype[idx] += delta * diff;
-
+            }
+            bool correlate(){
+                return true;
+            }
+            void add_step(){
+                generation++;
+            }
+        };
+        
+        class change{
+        public:
+            bool correlate(){
+                return false;
+            }
+            void add_step(){
+            }
+            void doit(std::vector<int>& genotype){
+                
             }
         };
     }
@@ -190,11 +265,32 @@ namespace gen{
                 return genotype;
             }
             void rnd(const std::vector<double>& min, const std::vector<double>& max){
+                #pragma GCC ivdep
                 for(int i = 0; i< size; i++){
                     genotype[i] = random_double(min[i],max[i]);
                 }
             }
+            double fitness(std::function<double(std::vector<double>)> algo){
+                return algo(genotype);
+            }
+            
         };
+        namespace salesman{
+            class neighbour{
+            public:
+                neighbour():distance_matrix({}){};
+                const std::vector<std::vector<double>>& distance_matrix; 
+                std::vector<int> path;
+                neighbour(const std::vector<std::vector<double>>& dist_matrix)
+                    : distance_matrix(dist_matrix) {}
+                std::vector<int>& get(){
+                    return path;
+                }
+                double fitness(std::function<double(std::vector<int>, std::vector<std::vector<double>>)> algo){
+                return algo(path,distance_matrix);
+            }
+            };                                                                                                                                     
+        }
     }
 
     template <typename T>
@@ -283,7 +379,7 @@ namespace gen{
 
 
     
-    template<typename GeneType,typename ReproductionPolicy, typename MutationPolicy, typename CrossoverPolicy>
+    template<typename GeneType,typename ReproductionPolicy, typename MutationPolicy, typename CrossoverPolicy, typename Algo>
     class GA{
     public:
         gen::population<GeneType> population;
@@ -296,14 +392,15 @@ namespace gen{
         size_t max_step=100;
         std::vector<double> min_borders;
         std::vector<double> max_borders;
-        std::function<double(const std::vector<double>)> algo;
+        Algo algo;
         gen::reproduction::EXTREMUM dir;
 
-        GA<GeneType,ReproductionPolicy,MutationPolicy,CrossoverPolicy>(GeneType gt, ReproductionPolicy rp, MutationPolicy mp, CrossoverPolicy cp, gen::reproduction::EXTREMUM dir = gen::reproduction::EXTREMUM::MAX){
+        GA<GeneType,ReproductionPolicy,MutationPolicy,CrossoverPolicy,Algo>(GeneType gt, ReproductionPolicy rp, MutationPolicy mp, CrossoverPolicy cp,Algo& algo, gen::reproduction::EXTREMUM dir = gen::reproduction::EXTREMUM::MAX){
             population_size = 20;
             population = gen::population<GeneType>(population_size);
             new_population = gen::population<GeneType>(population_size);
             this->dir = dir;
+            this->algo = algo;
             reproduction_p =rp;
             reproduction_p.dir = dir;
             mutation_p = mp;
@@ -314,7 +411,8 @@ namespace gen{
             population.resize(population_size);
             new_population.resize(population_size);
         }
-        void set_algo(std::function<double(std::vector<double>)> algo){
+
+        void set_algo(Algo algo){
                 this->algo = algo;           
         }
         void fill(std::vector<double> min, std::vector<double> max){
@@ -328,7 +426,7 @@ namespace gen{
                 throw std::runtime_error("Fitness algorithm (algo) not set.");
             }
             for(int i =0; i< population.size(); i++){
-                population.fit_at(i) = algo(population.at(i).get());
+                population.fit_at(i) = population.at(i).fitness(algo);
             }
         }
 
@@ -354,7 +452,10 @@ namespace gen{
         void mutate(){
 
             for(int i = 0; i< population.size();i++){
-                mutation_p.doit(new_population.at(i).get(),current_step,max_step);
+                mutation_p.doit(new_population.at(i).get());
+            }
+            if(mutation_p.correlate()){
+                mutation_p.add_step();
             }
         }
         void reduce(){
@@ -362,10 +463,10 @@ namespace gen{
             population.sort(dir);
             population.resize(10);
             population.append_range(new_population);
+            
+            population.clamp(min_borders,max_borders);
             calculate_fitness();
             population.sort(dir);
-            population.clamp(min_borders,max_borders);
-
             
             //population.print();
             population.resize(population_size);

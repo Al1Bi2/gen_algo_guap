@@ -2,6 +2,9 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib
 import math
+
+import numpy as np
+
 matplotlib.use('TkAgg')
 path = [
     0, 21, 7, 25, 30, 27, 2, 35, 34, 19,
@@ -170,7 +173,7 @@ def selection(population, fitnesses):
 
 
 
-def plot_path(individual, coordinates, generation):
+def plot_path(individual, coordinates, generation, best_distance):
     current_city = 0
     path = [current_city]
     for _ in range(len(individual) - 1):
@@ -186,7 +189,7 @@ def plot_path(individual, coordinates, generation):
     for i, city in enumerate(individual):
         plt.text(coordinates[city][0], coordinates[city][1], str(city+1), fontsize=12, ha='right')
 
-    plt.title(f'Path at Generation {generation}')
+    plt.title(f'Path at Generation {generation} Best fit = {best_distance:.3f}')
     plt.xlabel('X')
     plt.ylabel('Y')
     plt.legend()
@@ -262,7 +265,61 @@ def genetic_algorithm(cities, distances, coordinates, pop_size=100, generations=
 
     best_individual = min(population, key=lambda ind: fitness(ind, distances))
     return best_individual, fitness(best_individual, distances),population
+def run_genetic_algorithm_with_varying_parameters():
+    coordinates = load_tsp("eil51.tsp")
+    cities = list(range(len(coordinates)))
+    distances = [[euclidean_distance(coordinates[i], coordinates[j]) for j in cities] for i in cities]
 
+    crossover_methods = ["alternating", "heuristic"]
+    crossover_rates = [i * 0.3 for i in range(1, 2)]  # От 0.1 до 1.0
+    mutation_rates = [i * 0.1 for i in range(0, 2)]  # От 0.05 до 0.25
+
+    steps_data = []
+
+    for crossover_method in crossover_methods:
+        print(f"Тестирование метода кроссинговера: {crossover_method}")
+
+        for crossover_rate in crossover_rates:
+            for mutation_rate in mutation_rates:
+                print(f"  Кроссинговер с вероятностью {crossover_rate:.2f} и мутация с вероятностью {mutation_rate:.2f}")
+                best_fitness = float('inf')
+                generation = 0
+                population = None
+
+                while best_fitness > 460 and generation < 3000:
+                    generation += 1
+
+                    best_individual, best_fitness, population = genetic_algorithm(
+                        cities, distances, coordinates, pop_size=100, generations=1,
+                        crossover_rate=crossover_rate, mutation_rate=mutation_rate,
+                        elitism=True, elite_size=10, crossover_method=crossover_method,
+                        population=population
+                    )
+                # Записываем количество шагов (итераций)
+                steps_data.append((crossover_method, crossover_rate, mutation_rate,generation))
+
+    # После выполнения всех тестов строим график
+    steps_data = np.array(steps_data)
+    print(steps_data)
+    # Создаем сетку для подграфиков
+    fig, axs = plt.subplots(len(crossover_methods), 1, figsize=(10, 15))
+
+    for idx, crossover_method in enumerate(crossover_methods):
+        ax = axs[idx]
+        method_data = steps_data[steps_data[:, 0] == crossover_method]
+
+        # Разделяем по вероятности кроссинговера и мутации
+        for mutation_rate in mutation_rates:
+            subset = method_data[method_data[:, 2] == mutation_rate]
+            ax.plot(subset[:, 1], subset[:, 3], label=f"Mutation rate = {mutation_rate:.2f}")
+
+        ax.set_title(f"{crossover_method.capitalize()} Crossover")
+        ax.set_xlabel("Crossover Rate")
+        ax.set_ylabel("Number of Steps")
+        ax.legend()
+
+    plt.tight_layout()
+    plt.show()
 
 def run_genetic_algorithm_steps():
     coordinates = load_tsp("eil51.tsp")
@@ -286,7 +343,7 @@ def run_genetic_algorithm_steps():
         )
         print(f"Лучший путь: {best_solution}, длина пути: {best_distance}")
 
-        plot_path(best_solution, coordinates, generations)
+        plot_path(best_solution, coordinates, generations, best_distance)
 
 
 
@@ -295,12 +352,15 @@ def menu():
     while True:
         print("\n=== Меню ===")
         print("1. Запустить генетический алгоритм с заданным числом шагов")
-        print("2. Выйти")
+        print("2. Исследовать")
+        print("3. Выйти")
         choice = input("Выберите пункт меню: ")
 
         if choice == '1':
             run_genetic_algorithm_steps()
-        elif choice == '2':
+        elif choice == "2":
+            run_genetic_algorithm_with_varying_parameters()
+        elif choice == '3':
             print("Выход...")
             break
         else:

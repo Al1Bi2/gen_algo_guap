@@ -1,3 +1,4 @@
+import copy
 import random
 import math
 
@@ -7,7 +8,6 @@ from decimal import Overflow
 getcontext().prec = 10
 getcontext().traps[InvalidOperation] = False
 getcontext().traps[Overflow] = False
-print(getcontext())
 
 # Функции для представления операций
 def add(x: Decimal, y: Decimal) -> Decimal:
@@ -52,8 +52,8 @@ def power(x: Decimal, y: Decimal) -> Decimal:
     return Decimal(x ** y)
 
 # Типы узлов
-FUNCTIONS = [add, sub, mul, div, abs_func, sin_func, cos_func, exp_func, power]
-TERMINALS = ['x1', 'x2', 'x3', 'x4', 'x5', Decimal(1), Decimal(2)]  # Переменные и константы
+FUNCTIONS = [add, sub, mul, div, abs_func, sin_func, cos_func]
+TERMINALS = ['x1', 'x2', 'x3', 'x4', 'x5',Decimal(1), Decimal(2)]  # Переменные и константы
 
 
 class Node:
@@ -161,7 +161,11 @@ class Tree:
     def _print_function(self, node: Node):
         if node is None:
             return  ""
-        return "("+self._print_function(node.left) + " " + str(node.value) + " " + self._print_function(node.right)+")"
+        value =str(node.value)
+        if len(value.split("function"))!=1:
+            value = value.split("function")[1].split(" at")[0]
+        depth = _get_node_height(self.root,node)
+        return "\n" + "\t"*depth + "("+ value + " " + self._print_function(node.left)+ " " + self._print_function(node.right)+")"
 def _get_node_height(root: Node, target_node: Node):
     # Рекурсивно определяет высоту целевого узла в дереве
     if root is None:
@@ -275,10 +279,10 @@ def node_mutation(tree: Tree):
 
     # Замена функции или терминала
     if target_node.value in FUNCTIONS:
-        if target_node.value in [abs_func, sin_func, cos_func, exp_func]:
-            target_node.value = random.choice([abs_func, sin_func, cos_func, exp_func])
+        if target_node.value in [abs_func, sin_func, cos_func]:
+            target_node.value = random.choice([abs_func, sin_func, cos_func])
         else:
-            target_node.value = random.choice([add, sub, mul, div, power])
+            target_node.value = random.choice([add, sub, mul, div])
 
     elif target_node.value in TERMINALS:
         target_node.value = random.choice(TERMINALS)
@@ -374,24 +378,22 @@ def calculate_fitness(population):
     for individual in population:
 
         fitness = 0
-        for x1 in range(-600, 601, 200):
-            for x2 in range(-600, 601, 200):
-                for x3 in range(-600, 601, 200):
-                    for x4 in range(-600, 601, 200):
-                        for x5 in range(-600, 601, 200):
-                            # Пример оценки отклонений от целевой функции
-                            predicted = individual.tree.evaluate({'x1': Decimal(x1), 'x2': Decimal(x2), 'x3': Decimal(x3), 'x4': Decimal(x4), 'x5': Decimal(x5)})
+        samples = 100
+        x1,x2,x3,x4,x5 = random.sample(range(-600,600),5)
+        for _ in range(samples):
 
-                            target = target_function(Decimal(x1), Decimal(x2), Decimal(x3), Decimal(x4), Decimal(x5))  # Целевая функция (x1, x2, x3, x4, x5)
+            predicted = individual.tree.evaluate({'x1': Decimal(x1), 'x2': Decimal(x2), 'x3': Decimal(x3), 'x4': Decimal(x4), 'x5': Decimal(x5)})
 
-                            fitness += (predicted - target) ** 2
+            target = target_function(Decimal(x1), Decimal(x2), Decimal(x3), Decimal(x4), Decimal(x5))  # Целевая функция (x1, x2, x3, x4, x5)
+
+            fitness += ((predicted - target) ** 2)
 
         individual.fitness = fitness
 
 
     return population
 def target_function(x1, x2, x3, x4, x5):
-    return x1 + x2
+    return x1*x1+x2+2*x3
 class Individual:
     def __init__(self, tree: Tree, fitness: float):
         self.tree = tree
@@ -404,7 +406,7 @@ def initialize_population(pop_size, max_depth) -> list[Individual]:
     is_grow = 1
     for _ in range(pop_size):
         tree = Tree()
-        tree.create(is_grow,max_depth=depth)
+        tree.create(is_grow, max_depth=depth)
         population.append(Individual(tree, Decimal(0.0)))
         is_grow = not is_grow
         depth = depth % max_depth
@@ -412,12 +414,12 @@ def initialize_population(pop_size, max_depth) -> list[Individual]:
 
 def tournament_selection(population, tournament_size):
     tournament = random.sample(population, tournament_size)
-    winner = min(tournament, key=lambda individual: individual.fitness)
-    return winner
+    sorted_tournament = deepcopy(sorted(tournament, key=lambda individual: individual.fitness))
+    return sorted_tournament[0], sorted_tournament[1]
 
 def elitism_selection(population, elite_size):
     sorted_population = sorted(population, key=lambda individual: individual.fitness)
-    return sorted_population[:elite_size]
+    return deepcopy(sorted_population[:elite_size])
 
 
 def genetic_algorithm(population, max_generations, max_size, tournament_size, elite_size, crossover_chance=0.5,
@@ -430,8 +432,9 @@ def genetic_algorithm(population, max_generations, max_size, tournament_size, el
         # Шаг 2: Отбор с использованием турнира
         selected_individuals = []
         while len(selected_individuals) < len(population) - elite_size:
-            parent = tournament_selection(population, tournament_size)
-            selected_individuals.append(parent)
+            parent1, parent2 = tournament_selection(population, tournament_size)
+            selected_individuals.append(parent1)
+            selected_individuals.append(parent2)
 
         # Шаг 3: Элита - выбираем лучшие особи
         elite_individuals = elitism_selection(population, elite_size)
@@ -455,13 +458,14 @@ def genetic_algorithm(population, max_generations, max_size, tournament_size, el
             # Добавляем в следующее поколение
             next_generation.append(parent1)
             next_generation.append(parent2)
-            print(i*2)
+
 
         # Обновляем популяцию
-        population = next_generation
-
-        # Оценка новой популяции
+        population.extend(next_generation)
         population = calculate_fitness(population)
+
+        sorted_population = copy.copy(sorted(population, key=lambda individual: individual.fitness))
+        population = (sorted_population[:len(sorted_population)//2])
 
         # Печать состояния на текущем шаге (например, фитнес лучшего индивида)
         best_individual = min(population, key=lambda individual: individual.fitness)
@@ -476,8 +480,8 @@ def main():
     print("Hello")
     getcontext().prec = 10
     print(getcontext())
-    population = initialize_population(100, 1)
-    best_individual = genetic_algorithm(population, 20, 2, 3, 4, 0.5, 0.1)
+    population = initialize_population(500, 4)
+    best_individual = genetic_algorithm(population, 100, 4, 5, 3, 0.5, 0.3)
     print("Best Individual: ", best_individual.tree,"\n Best Fitness: ", best_individual.fitness)
 
 

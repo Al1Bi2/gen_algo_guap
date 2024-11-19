@@ -1,6 +1,9 @@
 import copy
 import random
 import math
+import matplotlib.pyplot as plt
+import networkx as nx
+
 
 from decimal import Decimal, getcontext
 from decimal import InvalidOperation
@@ -166,6 +169,48 @@ class Tree:
             value = value.split("function")[1].split(" at")[0]
         depth = _get_node_height(self.root,node)
         return "\n" + "\t"*depth + "("+ value + " " + self._print_function(node.left)+ " " + self._print_function(node.right)+")"
+
+    def plot_graph(self):
+        """
+        Визуализирует дерево с помощью библиотеки NetworkX и Matplotlib
+        """
+        graph = nx.DiGraph()
+        positions = {}
+
+        def add_edges(node, parent_id=None, depth=0, pos=0):
+            if node is None:
+                return
+            node_id = id(node)
+            positions[node_id] = (pos, -depth)  # Расположение узлов на графике
+            label = str(node.value)
+
+            if callable(node.value):  # Если это функция, преобразуем её в читаемую форму
+                label = node.value.__name__
+            graph.add_node(node_id, label=label)
+
+            if parent_id is not None:
+                graph.add_edge(parent_id, node_id)
+
+            # Рекурсивно добавляем дочерние узлы
+            left_pos = pos - 1 / (2 ** (depth + 1))  # Смещение для левого поддерева
+            right_pos = pos + 1 / (2 ** (depth + 1))  # Смещение для правого поддерева
+            add_edges(node.left, node_id, depth + 1, left_pos)
+            add_edges(node.right, node_id, depth + 1, right_pos)
+
+        # Построение графа начиная с корня дерева
+        add_edges(self.root)
+
+        # Визуализация графа
+        plt.figure(figsize=(12, 8))
+        labels = nx.get_node_attributes(graph, 'label')
+        nx.draw(graph, pos=positions, labels=labels, with_labels=True, node_size=2000, node_color="skyblue")
+        plt.title("Tree Visualization")
+        plt.show()
+
+
+
+
+
 def _get_node_height(root: Node, target_node: Node):
     # Рекурсивно определяет высоту целевого узла в дереве
     if root is None:
@@ -193,6 +238,11 @@ def is_compatible(node1, node2):
     if (node1.left is None and node1.right is not None) and (node2.left is None and node2.right is not None):
         return 2  # Оба унарные узлы
     return 0  # Узлы несовместимы
+
+
+
+
+
 from copy import deepcopy
 def subtree_crossover(tree1: Tree, tree2: Tree,maxHeight : int):
     # Получаем случайные узлы (поддеревья) в каждом из деревьев
@@ -392,8 +442,10 @@ def calculate_fitness(population):
 
 
     return population
+
 def target_function(x1, x2, x3, x4, x5):
     return x1*x1+x2+2*x3
+
 class Individual:
     def __init__(self, tree: Tree, fitness: float):
         self.tree = tree
@@ -470,6 +522,8 @@ def genetic_algorithm(population, max_generations, max_size, tournament_size, el
         # Печать состояния на текущем шаге (например, фитнес лучшего индивида)
         best_individual = min(population, key=lambda individual: individual.fitness)
         print(f"Best Individual: {best_individual.tree.print_function()} - Best Fitness: {best_individual.fitness}")
+        if(generation%20==0):
+            best_individual.tree.plot_graph()
 
     # Возвращаем лучший результат после всех поколений
     best_individual = min(population, key=lambda individual: individual.fitness)
@@ -481,7 +535,7 @@ def main():
     getcontext().prec = 10
     print(getcontext())
     population = initialize_population(500, 4)
-    best_individual = genetic_algorithm(population, 100, 4, 5, 3, 0.5, 0.3)
+    best_individual = genetic_algorithm(population, 100, 4, 5, 3, 1, 1)
     print("Best Individual: ", best_individual.tree,"\n Best Fitness: ", best_individual.fitness)
 
 

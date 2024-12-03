@@ -4,7 +4,7 @@ import numpy as np
 
 
 class AntColonyAlgorithm:
-    def __init__(self, graph ,ants_num, mode = "tsp", alpha = 0.1, beta = 0.1,start_node = 0,pheromone_evaporation = 0.5):
+    def __init__(self, graph ,ants_num, mode = "tsp", alpha = 0.8, beta = 4,start_node = 0,pheromone_evaporation = 0.1):
         self.graph  = graph #graph is adjacency matrix
         self.mode = mode
         self.alpha = alpha
@@ -14,7 +14,7 @@ class AntColonyAlgorithm:
         self.ants_num = ants_num
 
         self.ants = []
-        self.pheromones = [[0.1 for _ in range(len(self.graph))] for _ in range(len(self.graph))]
+        self.pheromones = [[0.01 for _ in range(len(self.graph))] for _ in range(len(self.graph))]
 
     def get_next_node(self, current_node, path,cyclic = True):
         neighbours = list(self.graph.neighbors(current_node))
@@ -24,7 +24,7 @@ class AntColonyAlgorithm:
         if len(not_visited_neighbours) == 0:
             return None
         #a = self.graph[current_node][current_node+1]
-        probabilities_list = [pow(self.pheromones[current_node][n], self.alpha) * pow((1 / self.graph[current_node][n]["weight"]), self.beta) for n in not_visited_neighbours]
+        probabilities_list = [pow(self.pheromones[current_node][n], self.alpha) * pow((10 / self.graph[current_node][n]["weight"]), self.beta) for n in not_visited_neighbours]
         sum_of_probabilities = sum(probabilities_list)
         probabilities = [0]
         rand = np.random.rand()
@@ -33,9 +33,8 @@ class AntColonyAlgorithm:
             if rand < probabilities[-1]:
                 next_node = not_visited_neighbours[i]
 
+                return next_node
 
-
-        return next_node
     def get_path_len(self,path):
         return sum([self.graph[path[i]][path[i + 1]]["weight"] for i in range(len(path) - 1)])
 
@@ -153,7 +152,7 @@ def main():
     k = 0
     while True:
         k+=1
-        step_result = aco.run(10)
+        step_result = aco.run(1)
 
         plot_path(step_result[0], cities, k, step_result[1])
     print("Hello")
